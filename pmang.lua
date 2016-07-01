@@ -7,6 +7,10 @@ local displaymode = "full"
 local displaymenu = "main"
 local noteiconxpos = 0
 local RUNNING = true
+local notemsgs = {}
+local unreadnotes = false
+local scrollpos = 1
+local pospossible = nil
 local peris = {
 	["top"] = nil,
 	["bottom"] = nil,
@@ -147,6 +151,7 @@ local function drawTopBar()
 	end
 	term.setCursorPos(w-5,1)
 	noteiconxpos = w-5
+	if unreadnotes then term.setBackgroundColor(colors.yellow) end
 	term.write(" ! ")
 	term.setBackgroundColor(colors.red)
 	term.setCursorPos(w,1)
@@ -276,6 +281,46 @@ local function drawPeripherals()
 		end
 	end
 end
+-- Notification Center
+local function drawNotes()
+	term.setBackgroundColor(colors.white)
+	term.clear()
+	drawTopBar()
+	term.setBackgroundColor(colors.lightGray)
+	term.setTextColor(colors.white)
+	term.setCursorPos(noteiconxpos,1)
+	term.write(" ! ")
+	term.setBackgroundColor(colors.white)
+	term.setTextColor(colors.black)
+	term.setCursorPos(1,2)
+	term.write("Notification Center")
+
+	-- calculate vars
+	local greatestpos = 1
+	for i = 1,#notemsgs do
+		local ref = notemsgs[i]:len()
+		if ref > greatestpos then
+			greatestpos = ref
+		end
+	end
+
+	pospossible = #notemsgs-(h-4)
+	if pospossible < 1 then pospossible = 1 end
+
+	-- draw
+	term.setCursorPos(1,4)
+	for i = scrollpos,#notemsgs do
+		if i > #notemsgs then break end
+		term.write(notemsgs[i])
+		for i = 1,greatestpos do
+			term.write(" ")
+		end
+		local x,y = term.getCursorPos()
+		y = y+1
+		term.setCursorPos(1,y)
+		if y > h then break end
+	end
+end
 -- Draw wrapper function
 local function drawScreen()
 	term.setBackgroundColor(colors.white)
@@ -332,9 +377,58 @@ local function evtHandler()
 		elseif e[1] == "peripheral_detach" then
 			peris[e[2]] = nil
 			drawScreen()
+		elseif e[1] == "note_center" then
+			table.insert(notemsgs,e[2])
+			unreadnotes = true
+			drawTopBar()
 		elseif e[1] == "mouse_click" and e[2] == 1 then
-			if e[3] == w and e[4] == 1 then break end
-		elseif e[1] == "key" and e[2] == keys.q then break end
+			if e[3] == w and e[4] == 1 then break
+			elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then
+				pospossible = #notemsgs-(h-4)
+				if pospossible < 1 then pospossible = 1 end
+				if pospossible then scrollpos = pospossible end
+				drawNotes()
+				unreadnotes = false
+				while true do -- NOTE CENTER LOOP
+					local e = {os.pullEvent()}
+					if e[1] == "term_resize" then
+						w,h = term.getSize()
+						drawScreen()
+					elseif e[1] == "peripheral" then
+						scanPeripherals(e[2])
+					elseif e[1] == "peripheral_detach" then
+						peris[e[2]] = nil
+					elseif e[1] == "note_center" then
+						table.insert(notemsgs,e[2])
+						pospossible = #notemsgs-(h-4)
+						if pospossible < 1 then pospossible = 1 end
+						scrollpos = pospossible
+						drawNotes()
+					elseif e[1] == "key" and e[2] == keys.q then
+						RUNNING = false
+						break
+					elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test from inside note center") -- DEV ONLY
+					elseif e[1] == "mouse_click" and e[2] == 1 then
+						if e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then
+							drawScreen()
+							break
+						elseif e[3] == w and e[4] == 1 then
+							RUNNING = false
+							break
+						end
+					elseif e[1] == "mouse_scroll" then
+						if e[2] == 1 and scrollpos < pospossible then
+							scrollpos = scrollpos+1
+						elseif e[2] == -1 and scrollpos > 1 then
+							scrollpos = scrollpos-1
+						end
+						drawNotes()
+					end
+				end
+			end
+		elseif e[1] == "key" and e[2] == keys.q then break
+		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+		end
 	end
 end
 drawScreen()
