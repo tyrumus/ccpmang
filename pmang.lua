@@ -4,6 +4,8 @@
 -- local w,h = term.getSize()
 local w,h = 51,19
 local displaymode = "full"
+local displaymenu = "main"
+local noteiconxpos = 0
 local RUNNING = true
 local peris = {
 	["top"] = nil,
@@ -109,7 +111,7 @@ local function logmsg(msg)
 	f.writeLine(msg)
 	f.close()
 end
-
+-- Main menu
 local function drawPeri(t,xpos,ypos)
 	term.setTextColor(colors.black)
 
@@ -138,8 +140,13 @@ local function drawTopBar()
 	term.setBackgroundColor(colors.gray)
 	term.setCursorPos(1,1)
 	term.clearLine()
-	term.write(" Peripheral Manager")
+	if w < 26 then
+		term.write(" pmang")
+	else
+		term.write(" Peripheral Manager")
+	end
 	term.setCursorPos(w-5,1)
+	noteiconxpos = w-5
 	term.write(" ! ")
 	term.setBackgroundColor(colors.red)
 	term.setCursorPos(w,1)
@@ -198,8 +205,6 @@ local function drawBoxes()
 			term.write(sides[sidestep])
 			sidestep = sidestep+1
 		end
-	else
-
 	end
 end
 local function drawPeripherals()
@@ -244,9 +249,34 @@ local function drawPeripherals()
 			end
 		end
 	else
-
+		local sides = {"top", "bottom", "front", "left", "right", "back"}
+		term.setTextColor(colors.white)
+		local y = ((h-12)/2)-1
+		for i = 1,6 do
+			if peris[sides[i]] ~= nil then
+				local ref = peris[sides[i]]
+				if ref == "drive" then dispname = "Disk  Drive"
+				elseif ref == "printer" then dispname = "Printer"
+				elseif ref == "monitor" then dispname = "Monitor"
+				elseif ref == "amonitor" then dispname = "Adv Monitor"
+				elseif ref == "modem" then dispname = "Wired Modem"
+				elseif ref == "wmodem" then dispname = "Wireless Modem"
+				end
+				local cenx = (w-dispname:len())/2
+				term.setBackgroundColor(colors.lime)
+				term.setCursorPos(cenx, y+i)
+				term.write(" "..dispname.." ")
+			else
+				local cenx = (w-sides[i]:len())/2
+				term.setBackgroundColor(colors.red)
+				term.setCursorPos(cenx, y+i)
+				term.write(" "..sides[i].." ")
+			end
+			y = y+1
+		end
 	end
 end
+-- Draw wrapper function
 local function drawScreen()
 	term.setBackgroundColor(colors.white)
 	term.clear()
@@ -256,8 +286,10 @@ local function drawScreen()
 		displaymode = "full"
 	end
 	drawTopBar()
-	drawBoxes()
-	drawPeripherals()
+	if displaymenu == "main" then
+		drawBoxes()
+		drawPeripherals()
+	end
 end
 
 -- Handler
