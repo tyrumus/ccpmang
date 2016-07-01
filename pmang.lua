@@ -1,23 +1,32 @@
--- Peripheral Manager
+--[[ Peripheral Manager by LegoStax
+	TODO:
+	- Detect and display peripherals on network
+]]--
 
 -- Init variables
 -- local w,h = term.getSize()
 local w,h = 51,19
 local displaymode = "full"
 local displaymenu = "main"
-local noteiconxpos = 0
 local RUNNING = true
+local networkperis = false
+
+local noteiconxpos = 0
 local notemsgs = {}
 local unreadnotes = false
 local scrollpos = 1
 local pospossible = nil
+
 local peris = {
-	["top"] = nil,
-	["bottom"] = nil,
-	["left"] = nil,
-	["right"] = nil,
-	["front"] = nil,
-	["back"] = nil,
+	["sides"] = {
+		top = nil,
+		bottom = nil,
+		left = nil,
+		right = nil,
+		front = nil,
+		back = nil,
+	},
+	["network"] = {},
 }
 local boxes = {
 	["top"] = {x = 0, y = 0},
@@ -109,17 +118,74 @@ local ptxt = {
 		"     ",
 	},
 }
-
+-- Utils
 local function logmsg(msg)
 	local f = fs.open("/log", "a")
 	f.writeLine(msg)
 	f.close()
 end
+local function scanPeripherals(p)
+	local sides = {"top", "bottom", "front", "left", "right", "back"}
+	if p then
+		local s = table.concat(sides)
+		if string.find(s, p) then
+			local ref = peripheral.getType(p)
+			if ref == "modem" then
+				if peripheral.call(p, "isWireless") then
+					ref = "wmodem"
+				else
+					ref = "modem"
+				end
+			elseif ref == "monitor" then
+				if peripheral.call(p, "isColor") then
+					ref = "amonitor"
+				else
+					ref = "monitor"
+				end
+			end
+			peris["sides"][p] = ref
+		else
+			table.insert(peris.network, p)
+		end
+		return
+	end
+	local allperis = peripheral.getNames()
+	for a = 1,#allperis do
+		local failed = 0
+		for i = 1,#sides do
+			if allperis[a] ~= sides[i] then
+				failed = failed+1
+			end
+		end
+		if failed == 6 then
+			networkperis = true
+
+			table.insert(peris.network, allperis[a])
+		end
+	end
+	for i = 1,#sides do
+		if peripheral.isPresent(sides[i]) then
+			local ref = peripheral.getType(sides[i])
+			if ref == "modem" then
+				if peripheral.call(sides[i], "isWireless") then
+					ref = "wmodem"
+				else
+					ref = "modem"
+				end
+			elseif ref == "monitor" then
+				if peripheral.call(sides[i], "isColor") then
+					ref = "amonitor"
+				else
+					ref = "monitor"
+				end
+			end
+			peris["sides"][sides[i]] = ref
+		end
+	end
+end
 -- Main menu
 local function drawPeri(t,xpos,ypos)
 	term.setTextColor(colors.black)
-
-	logmsg("type: "..t..", "..xpos..", "..ypos)
 
 	for y = 1,4 do
 		for x = 1,5 do
@@ -191,8 +257,6 @@ local function drawBoxes()
 		boxes["right"].y = starty+8
 		boxes["back"].x = startx+30
 		boxes["back"].y = starty+8
-		logmsg("starty = "..starty)
-		logmsg("startx = "..startx)
 		local sides = {"top", "bottom", "front", "left", "right", "back"}
 		local sidestep = 1
 		for x = startx,startx+30,15 do
@@ -213,114 +277,186 @@ local function drawBoxes()
 	end
 end
 local function drawPeripherals()
-	if displaymode == "full" then
-		local xicon = 3
-		local yicon = 1
-		if peris["top"] ~= nil then
-			drawPeri(peris["top"], boxes["top"].x+xicon, boxes["top"].y+yicon)
+	if displaymenu == "main" then
+		if displaymode == "full" then
+			local xicon = 3
+			local yicon = 1
+			if peris["sides"]["top"] ~= nil then
+				drawPeri(peris["sides"]["top"], boxes["top"].x+xicon, boxes["top"].y+yicon)
+			end
+			if peris["sides"]["bottom"] ~= nil then
+				drawPeri(peris["sides"]["bottom"], boxes["bottom"].x+xicon, boxes["bottom"].y+yicon)
+			end
+			if peris["sides"]["front"] ~= nil then
+				drawPeri(peris["sides"]["front"], boxes["front"].x+xicon, boxes["front"].y+yicon)
+			end
+			if peris["sides"]["left"] ~= nil then
+				drawPeri(peris["sides"]["left"], boxes["left"].x+xicon, boxes["left"].y+yicon)
+			end
+			if peris["sides"]["right"] ~= nil then
+				drawPeri(peris["sides"]["right"], boxes["right"].x+xicon, boxes["left"].y+yicon)
+			end
+			if peris["sides"]["back"] ~= nil then
+				drawPeri(peris["sides"]["back"], boxes["back"].x+xicon, boxes["left"].y+yicon)
+			end
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			term.setTextColor(colors.black)
+			term.setBackgroundColor(colors.white)
+			for i = 1,6 do
+				local ref = peris["sides"][sides[i]]
+				local dispname = nil
+				if ref ~= nil then
+					if ref == "drive" then dispname = "Disk Drive"
+					elseif ref == "printer" then dispname = "Printer"
+					elseif ref == "monitor" then dispname = "Monitor"
+					elseif ref == "amonitor" then dispname = "Adv Monitor"
+					elseif ref == "modem" then dispname = "Wired Modem"
+					elseif ref == "wmodem" then dispname = "Wireless Modem"
+					end
+					local cenx = (11-dispname:len())/2
+					term.setCursorPos(cenx+boxes[sides[i]].x, boxes[sides[i]].y+7)
+					term.write(dispname)
+				end
+			end
+		elseif displaymode == "frag" then
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			term.setTextColor(colors.white)
+			local y = ((h-12)/2)-1
+			for i = 1,6 do
+				if peris["sides"][sides[i]] ~= nil then
+					local ref = peris["sides"][sides[i]]
+					if ref == "drive" then dispname = "Disk  Drive"
+					elseif ref == "printer" then dispname = "Printer"
+					elseif ref == "monitor" then dispname = "Monitor"
+					elseif ref == "amonitor" then dispname = "Adv Monitor"
+					elseif ref == "modem" then dispname = "Wired Modem"
+					elseif ref == "wmodem" then dispname = "Wireless Modem"
+					end
+					local cenx = (w-dispname:len())/2
+					term.setBackgroundColor(colors.lime)
+					term.setCursorPos(cenx, y+i)
+					term.write(" "..dispname.." ")
+				else
+					local cenx = (w-sides[i]:len())/2
+					term.setBackgroundColor(colors.red)
+					term.setCursorPos(cenx, y+i)
+					term.write(" "..sides[i].." ")
+				end
+				y = y+1
+			end
 		end
-		if peris["bottom"] ~= nil then
-			drawPeri(peris["bottom"], boxes["bottom"].x+xicon, boxes["bottom"].y+yicon)
-		end
-		if peris["front"] ~= nil then
-			drawPeri(peris["front"], boxes["front"].x+xicon, boxes["front"].y+yicon)
-		end
-		if peris["left"] ~= nil then
-			drawPeri(peris["left"], boxes["left"].x+xicon, boxes["left"].y+yicon)
-		end
-		if peris["right"] ~= nil then
-			drawPeri(peris["right"], boxes["right"].x+xicon, boxes["left"].y+yicon)
-		end
-		if peris["back"] ~= nil then
-			drawPeri(peris["back"], boxes["back"].x+xicon, boxes["left"].y+yicon)
-		end
-		local sides = {"top", "bottom", "front", "left", "right", "back"}
-		term.setTextColor(colors.black)
+	elseif displaymenu == "mainall" then
 		term.setBackgroundColor(colors.white)
-		for i = 1,6 do
-			local ref = peris[sides[i]]
-			local dispname = nil
-			if ref ~= nil then
-				if ref == "drive" then dispname = "Disk Drive"
-				elseif ref == "printer" then dispname = "Printer"
-				elseif ref == "monitor" then dispname = "Monitor"
-				elseif ref == "amonitor" then dispname = "Adv Monitor"
-				elseif ref == "modem" then dispname = "Wired Modem"
-				elseif ref == "wmodem" then dispname = "Wireless Modem"
+		term.clear()
+		drawTopBar()
+		local scrollpos = 1
+		local pospossible = 1
+		local data = {}
+		local function draw()
+			term.setBackgroundColor(colors.lightGray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(1,2)
+			term.write(" << Back ")
+			term.setBackgroundColor(colors.white)
+			term.setTextColor(colors.black)
+			term.write(" All Peripherals")
+
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			data = {}
+			for i = 1,6 do
+				if peris["sides"][sides[i]] ~= nil then
+					table.insert(data, sides[i])
 				end
-				local cenx = (11-dispname:len())/2
-				term.setCursorPos(cenx+boxes[sides[i]].x, boxes[sides[i]].y+7)
-				term.write(dispname)
+			end
+			for i = 1,#peris["network"] do
+				if peris["network"][i] ~= nil then
+					table.insert(data, peris["network"][i])
+				end
+			end
+			local greatestpos = 1
+			for i = 1,#data do
+				local ref = data[i]:len()
+				if ref > greatestpos then
+					greatestpos = ref
+				end
+			end
+			pospossible = #data-(h-3)
+			if pospossible < 1 then pospossible = 1 end
+
+			term.setCursorPos(2,3)
+			for i = scrollpos,#data do
+				if i > #data then break end
+				term.write(data[i])
+				for i = 1,greatestpos do
+					term.write(" ")
+				end
+				local x,y = term.getCursorPos()
+				y = y+1
+				term.setCursorPos(2,y)
+				if y > h then break end
 			end
 		end
-	else
-		local sides = {"top", "bottom", "front", "left", "right", "back"}
-		term.setTextColor(colors.white)
-		local y = ((h-12)/2)-1
-		for i = 1,6 do
-			if peris[sides[i]] ~= nil then
-				local ref = peris[sides[i]]
-				if ref == "drive" then dispname = "Disk  Drive"
-				elseif ref == "printer" then dispname = "Printer"
-				elseif ref == "monitor" then dispname = "Monitor"
-				elseif ref == "amonitor" then dispname = "Adv Monitor"
-				elseif ref == "modem" then dispname = "Wired Modem"
-				elseif ref == "wmodem" then dispname = "Wireless Modem"
+		draw()
+		while true do -- MAINALL handler
+			local e = {os.pullEvent()}
+			if e[1] == "term_resize" then
+				w,h = term.getSize()
+				drawScreen()
+			elseif e[1] == "peripheral" then
+				scanPeripherals(e[2])
+				draw()
+			elseif e[1] == "peripheral_detach" then
+				local success = false
+				local sides = {"top", "bottom", "front", "left", "right", "back"}
+				for i = 1,#peris["network"] do
+					if e[2] == peris["network"][i] then
+						table.remove(peris["network"], i)
+						success = true
+						break
+					end
 				end
-				local cenx = (w-dispname:len())/2
-				term.setBackgroundColor(colors.lime)
-				term.setCursorPos(cenx, y+i)
-				term.write(" "..dispname.." ")
-			else
-				local cenx = (w-sides[i]:len())/2
-				term.setBackgroundColor(colors.red)
-				term.setCursorPos(cenx, y+i)
-				term.write(" "..sides[i].." ")
+				if not success then
+					for i = 1,6 do
+						if e[2] == sides[i] then
+							peris["sides"][sides[i]] = nil
+							break
+						end
+					end
+				end
+				draw()
+			elseif e[1] == "note_center" then
+				table.insert(notemsgs,e[2])
+				unreadnotes = true
+				drawTopBar()
+			elseif e[1] == "key" and e[2] == keys.q then
+				RUNNING = false
+				break
+			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+			elseif e[1] == "mouse_scroll" then
+				if e[2] == 1 and scrollpos < pospossible then
+					scrollpos = scrollpos+1
+				elseif e[2] == -1 and scrollpos > 1 then
+					scrollpos = scrollpos-1
+				end
+				draw()
+			elseif e[1] == "mouse_click" and e[2] == 1 then
+				if e[3] == w and e[4] == 1 then
+					RUNNING = false
+					break
+				elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
+					break
+				elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+					displaymenu = "notecenter"
+					drawNotes()
+					displaymenu = "mainall"
+					draw()
+				end
 			end
-			y = y+1
 		end
+		displaymenu = "main"
 	end
 end
--- Notification Center
-local function drawNotes()
-	term.setBackgroundColor(colors.white)
-	term.clear()
-	drawTopBar()
-	term.setBackgroundColor(colors.lightGray)
-	term.setTextColor(colors.white)
-	term.setCursorPos(noteiconxpos,1)
-	term.write(" ! ")
-	term.setBackgroundColor(colors.white)
-	term.setTextColor(colors.black)
-	term.setCursorPos(1,2)
-	term.write("Notification Center")
 
-	-- calculate vars
-	local greatestpos = 1
-	for i = 1,#notemsgs do
-		local ref = notemsgs[i]:len()
-		if ref > greatestpos then
-			greatestpos = ref
-		end
-	end
-
-	pospossible = #notemsgs-(h-4)
-	if pospossible < 1 then pospossible = 1 end
-
-	-- draw
-	term.setCursorPos(1,4)
-	for i = scrollpos,#notemsgs do
-		if i > #notemsgs then break end
-		term.write(notemsgs[i])
-		for i = 1,greatestpos do
-			term.write(" ")
-		end
-		local x,y = term.getCursorPos()
-		y = y+1
-		term.setCursorPos(1,y)
-		if y > h then break end
-	end
-end
 -- Draw wrapper function
 local function drawScreen()
 	term.setBackgroundColor(colors.white)
@@ -334,36 +470,101 @@ local function drawScreen()
 	if displaymenu == "main" then
 		drawBoxes()
 		drawPeripherals()
+		if networkperis then
+			term.setBackgroundColor(colors.lightGray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(1,2)
+			term.write(" More >> ")
+		end
+	elseif displaymenu == "mainall" then
+		drawPeripherals()
+	end
+end
+
+-- Notification Center
+function drawNotes()
+	term.setBackgroundColor(colors.white)
+	term.clear()
+	drawTopBar()
+	term.setBackgroundColor(colors.lightGray)
+	term.setTextColor(colors.white)
+	term.setCursorPos(noteiconxpos,1)
+	term.write(" ! ")
+	term.setBackgroundColor(colors.white)
+	term.setTextColor(colors.black)
+	term.setCursorPos(1,2)
+	term.write("Notification Center")
+	local function draw()
+		-- calculate vars
+		local greatestpos = 1
+		for i = 1,#notemsgs do
+			local ref = notemsgs[i]:len()
+			if ref > greatestpos then
+				greatestpos = ref
+			end
+		end
+
+		pospossible = #notemsgs-(h-4)
+		if pospossible < 1 then pospossible = 1 end
+
+		-- draw
+		term.setCursorPos(1,4)
+		for i = scrollpos,#notemsgs do
+			if i > #notemsgs then break end
+			term.write(notemsgs[i])
+			for i = 1,greatestpos do
+				term.write(" ")
+			end
+			local x,y = term.getCursorPos()
+			y = y+1
+			term.setCursorPos(1,y)
+			if y > h then break end
+		end
+	end
+	pospossible = #notemsgs-(h-4)
+	if pospossible < 1 then pospossible = 1 end
+	if pospossible then scrollpos = pospossible end
+	draw()
+	unreadnotes = false
+	while true do -- NOTE CENTER LOOP
+		local e = {os.pullEvent()}
+		if e[1] == "term_resize" then
+			w,h = term.getSize()
+			drawScreen()
+		elseif e[1] == "peripheral" then
+			scanPeripherals(e[2])
+		elseif e[1] == "peripheral_detach" then
+			peris[e[2]] = nil
+		elseif e[1] == "note_center" then
+			table.insert(notemsgs,e[2])
+			pospossible = #notemsgs-(h-4)
+			if pospossible < 1 then pospossible = 1 end
+			scrollpos = pospossible
+			draw()
+		elseif e[1] == "key" and e[2] == keys.q then
+			RUNNING = false
+			break
+		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test from inside note center") -- DEV ONLY
+		elseif e[1] == "mouse_click" and e[2] == 1 then
+			if e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then
+				drawScreen()
+				break
+			elseif e[3] == w and e[4] == 1 then
+				RUNNING = false
+				break
+			end
+		elseif e[1] == "mouse_scroll" then
+			if e[2] == 1 and scrollpos < pospossible then
+				scrollpos = scrollpos+1
+			elseif e[2] == -1 and scrollpos > 1 then
+				scrollpos = scrollpos-1
+			end
+			draw()
+		end
 	end
 end
 
 -- Handler
-local function scanPeripherals(s)
-	local sides = peripheral.getNames()
-	if s then
-		sides = {s}
-	end
-	for i = 1,#sides do
-		if peripheral.isPresent(sides[i]) then
-			local ref = peripheral.getType(sides[i])
-			if ref == "modem" then
-				if peripheral.call(sides[i], "isWireless") then
-					ref = "wmodem"
-				else
-					ref = "modem"
-				end
-			elseif ref == "monitor" then
-				if peripheral.call(sides[i], "isColor") then
-					ref = "amonitor"
-				else
-					ref = "monitor"
-				end
-			end
-			peris[sides[i]] = ref
-			logmsg("peris["..sides[i].."] = "..ref)
-		end
-	end
-end
 scanPeripherals()
 local function evtHandler()
 	while RUNNING do
@@ -375,7 +576,24 @@ local function evtHandler()
 			scanPeripherals(e[2])
 			drawScreen()
 		elseif e[1] == "peripheral_detach" then
-			peris[e[2]] = nil
+			local success = false
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			for i = 1,#peris["network"] do
+				if e[2] == peris["network"][i] then
+					table.remove(peris["network"], i)
+					success = true
+					break
+				end
+			end
+			if not success then
+				for i = 1,6 do
+					if e[2] == sides[i] then
+						peris["sides"][sides[i]] = nil
+						break
+					end
+				end
+			end
+
 			drawScreen()
 		elseif e[1] == "note_center" then
 			table.insert(notemsgs,e[2])
@@ -383,48 +601,15 @@ local function evtHandler()
 			drawTopBar()
 		elseif e[1] == "mouse_click" and e[2] == 1 then
 			if e[3] == w and e[4] == 1 then break
-			elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then
-				pospossible = #notemsgs-(h-4)
-				if pospossible < 1 then pospossible = 1 end
-				if pospossible then scrollpos = pospossible end
+			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 and networkperis and displaymenu == "main" then
+				displaymenu = "mainall"
+				drawPeripherals()
+				drawScreen()
+			elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+				displaymenu = "notecenter"
 				drawNotes()
-				unreadnotes = false
-				while true do -- NOTE CENTER LOOP
-					local e = {os.pullEvent()}
-					if e[1] == "term_resize" then
-						w,h = term.getSize()
-						drawScreen()
-					elseif e[1] == "peripheral" then
-						scanPeripherals(e[2])
-					elseif e[1] == "peripheral_detach" then
-						peris[e[2]] = nil
-					elseif e[1] == "note_center" then
-						table.insert(notemsgs,e[2])
-						pospossible = #notemsgs-(h-4)
-						if pospossible < 1 then pospossible = 1 end
-						scrollpos = pospossible
-						drawNotes()
-					elseif e[1] == "key" and e[2] == keys.q then
-						RUNNING = false
-						break
-					elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test from inside note center") -- DEV ONLY
-					elseif e[1] == "mouse_click" and e[2] == 1 then
-						if e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then
-							drawScreen()
-							break
-						elseif e[3] == w and e[4] == 1 then
-							RUNNING = false
-							break
-						end
-					elseif e[1] == "mouse_scroll" then
-						if e[2] == 1 and scrollpos < pospossible then
-							scrollpos = scrollpos+1
-						elseif e[2] == -1 and scrollpos > 1 then
-							scrollpos = scrollpos-1
-						end
-						drawNotes()
-					end
-				end
+				displaymenu = "main"
+				drawScreen()
 			end
 		elseif e[1] == "key" and e[2] == keys.q then break
 		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
