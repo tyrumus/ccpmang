@@ -1,10 +1,9 @@
 --[[ Peripheral Manager by LegoStax
-	Peripheral functions: line 548
+	Peripheral functions: line 546
 
 	TODO:
 	- fix channel range sorter
 	- add about page for type computer
-	- add run program on monitor
 	- add send and receive messages
 	- add actual notifications
 ]]--
@@ -713,7 +712,8 @@ local function drivePeripheral(pointer)
 				end
 			elseif e[1] == "term_resize" then
 				w,h = term.getSize()
-				drawScreen()
+				drawTopBar()
+				draw()
 			elseif e[1] == "peripheral" then
 				scanPeripherals(e[2])
 			elseif e[1] == "peripheral_detach" then
@@ -895,7 +895,8 @@ local function drivePeripheral(pointer)
 			isPlaying = false
 		elseif e[1] == "term_resize" then
 			w,h = term.getSize()
-			drawScreen()
+			drawTopBar()
+			draw()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
 		elseif e[1] == "peripheral_detach" then
@@ -1118,7 +1119,8 @@ local function printerPeripheral(pointer)
 				end
 			elseif e[1] == "term_resize" then
 				w,h = term.getSize()
-				drawScreen()
+				drawTopBar()
+				draw()
 			elseif e[1] == "peripheral" then
 				scanPeripherals(e[2])
 			elseif e[1] == "peripheral_detach" then
@@ -1221,7 +1223,8 @@ local function printerPeripheral(pointer)
 			end
 		elseif e[1] == "term_resize" then
 			w,h = term.getSize()
-			drawScreen()
+			drawTopBar()
+			draw()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
 		elseif e[1] == "peripheral_detach" then
@@ -1286,6 +1289,116 @@ local function monitorPeripheral(pointer)
 		term.setBackgroundColor(colors.white)
 		term.setTextColor(colors.black)
 	end
+	local function runProgram()
+		local returnvalue = true
+		local sourcepath = ""
+		local cenx = 0
+
+		local function draw()
+			clear()
+			term.setBackgroundColor(colors.lightGray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(1,2)
+			term.write(" << Back ")
+
+			term.setBackgroundColor(colors.white)
+			term.setTextColor(colors.black)
+			term.setCursorPos((w-22)/2,3)
+			term.write("Run Program on monitor")
+
+			cenx = (w-17)/2
+
+			term.setCursorPos(cenx,5)
+			term.write("Source: "..sourcepath)
+
+			term.setBackgroundColor(colors.gray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(cenx,7)
+			term.write(" Browse ")
+			term.setCursorPos(cenx+11,7)
+			term.write(" Run ")
+		end
+		draw()
+		while true do
+			local e = {os.pullEvent()}
+			if e[1] == "mouse_click" and e[2] == 1 then
+				if e[3] == w and e[4] == 1 then
+					pmang.RUNNING = false
+					break
+				elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then -- back button
+					break
+				elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+					displaymenu = "notecenter"
+					drawNotes()
+					displaymenu = "mainmonitor"
+					draw()
+				elseif e[3] >= cenx and e[3] <= cenx+7 and e[4] == 7 then -- browse button
+					sourcepath = explorerDialog(pointer)
+					if sourcepath == "$$removed" then
+						returnvalue = false
+						break
+					end
+					draw()
+				elseif e[3] >= cenx+11 and e[3] <= cenx+15 and e[4] == 7 and sourcepath ~= "" then -- run button
+					term.setBackgroundColor(colors.lightGray)
+					term.setTextColor(colors.white)
+					local cenx = (w-10)/2
+					local ceny = (h-4)/2
+					term.setCursorPos(cenx,ceny)
+					term.write("Arguments ")
+					term.setCursorPos(cenx,ceny+1)
+					term.write("          ")
+					term.setCursorPos(cenx,ceny+2)
+					term.write("          ")
+					term.setCursorPos(cenx,ceny+3)
+					term.write("          ")
+
+					term.setCursorPos(cenx+1, ceny+2)
+					local input = read()
+					shell.switchTab(shell.openTab("monitor", pointer, sourcepath, input))
+					break
+				end
+			elseif e[1] == "term_resize" then
+				w,h = term.getSize()
+				drawTopBar()
+				draw()
+			elseif e[1] == "peripheral" then
+				scanPeripherals(e[2])
+			elseif e[1] == "peripheral_detach" then
+				local success = false
+				local sides = {"top", "bottom", "front", "left", "right", "back"}
+				for i = 1,#peris["network"] do
+					if e[2] == peris["network"][i] then
+						table.remove(peris["network"], i)
+						success = true
+						break
+					end
+				end
+				if not success then
+					for i = 1,6 do
+						if e[2] == sides[i] then
+							peris["sides"][sides[i]] = nil
+							break
+						end
+					end
+				end
+
+				if e[2] == pointer then
+					returnvalue = false
+					break
+				end
+			elseif e[1] == "note_center" then
+				table.insert(notemsgs,e[2])
+				unreadnotes = true
+				drawTopBar()
+			elseif e[1] == "key" and e[2] == keys.q then
+				pmang.RUNNING = false
+				break
+			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+			end
+		end
+		return returnvalue
+	end
 	local function draw()
 		clear()
 		term.setBackgroundColor(colors.lightGray)
@@ -1317,23 +1430,31 @@ local function monitorPeripheral(pointer)
 			if e[3] == w and e[4] == 1 then
 				pmang.RUNNING = false
 				break
-			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
+			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then -- back button
 				break
 			elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
 				displaymenu = "notecenter"
 				drawNotes()
 				displaymenu = "mainmonitor"
 				draw()
-			elseif e[3] >= 5 and e[3] <= 17 and e[4] == 11 then
-				clear()
-				term.setCursorPos(2,3)
-				term.write("Coming soon...")
-				sleep(3)
-				draw()
+			elseif e[3] >= 5 and e[3] <= 17 and e[4] == 11 then -- run program
+				displaymenu = "runmonprogram"
+				if not runProgram() then
+					clear()
+					term.setTextColor(colors.red)
+					term.setCursorPos(1,3)
+					term.write("Peripheral removed!")
+					sleep(3)
+					break
+				else
+					displaymenu = "mainmonitor"
+					draw()
+				end
 			end
 		elseif e[1] == "term_resize" then
 			w,h = term.getSize()
-			drawScreen()
+			drawTopBar()
+			draw()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
 		elseif e[1] == "peripheral_detach" then
@@ -1578,7 +1699,8 @@ local function modemPeripheral(pointer)
 			end
 		elseif e[1] == "term_resize" then
 			w,h = term.getSize()
-			drawScreen()
+			drawTopBar()
+			draw()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
 		elseif e[1] == "peripheral_detach" then
