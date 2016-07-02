@@ -2,9 +2,20 @@
 	Peripheral functions: line 228
 
 	TODO:
-	- add about page for each peripheral type
-	- add features for each peripheral type
+	- fix channel range sorter
+	- add about page for type computer
+	- add explorer function
+	- add copy/move files to/from disk
+	- add print from file
+	- add run program on monitor
+	- add send and receive messages
+	- add actual notifications
 ]]--
+
+if not term.isColor() or not term.isColour() then
+	print("Advanced computer required")
+	return
+end
 
 -- Init variables
 -- local w,h = term.getSize()
@@ -552,6 +563,111 @@ end
 
 local function monitorPeripheral(pointer)
 	displaymenu = "mainmonitor"
+
+	if peripheral.call(pointer, "isColor") then
+		dispname = "Advanced Monitor"
+		peritype = "amonitor"
+	else
+		dispname = "Monitor"
+		peritype = "monitor"
+	end
+
+	local mw, mh = nil,nil
+
+	local function clear()
+		term.setBackgroundColor(colors.white)
+		term.clear()
+		drawTopBar()
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+	end
+	local function draw()
+		clear()
+		term.setBackgroundColor(colors.lightGray)
+		term.setTextColor(colors.white)
+		term.setCursorPos(1,2)
+		term.write(" << Back ")
+
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+		term.setCursorPos(3,4)
+		term.write(dispname)
+		drawPeri(peritype,3,5)
+		term.setBackgroundColor(colors.white)
+		term.setCursorPos(10,6)
+		term.write("Name: "..pointer)
+		term.setCursorPos(10,7)
+		mw,mh = peripheral.call(pointer, "getSize")
+		term.write("Screen Size: "..mw.."x"..mh)
+
+		term.setBackgroundColor(colors.gray)
+		term.setTextColor(colors.white)
+		term.setCursorPos(5,11)
+		term.write(" Run program ")
+	end
+	draw()
+	while true do
+		local e = {os.pullEvent()}
+		if e[1] == "mouse_click" and e[2] == 1 then
+			if e[3] == w and e[4] == 1 then
+				RUNNING = false
+				break
+			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
+				break
+			elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+				displaymenu = "notecenter"
+				drawNotes()
+				displaymenu = "mainmonitor"
+				draw()
+			elseif e[3] >= 5 and e[3] <= 17 and e[4] == 11 then
+				clear()
+				term.setCursorPos(2,3)
+				term.write("Coming soon...")
+				sleep(3)
+				draw()
+			end
+		elseif e[1] == "term_resize" then
+			w,h = term.getSize()
+			drawScreen()
+		elseif e[1] == "peripheral" then
+			scanPeripherals(e[2])
+		elseif e[1] == "peripheral_detach" then
+			local success = false
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			for i = 1,#peris["network"] do
+				if e[2] == peris["network"][i] then
+					table.remove(peris["network"], i)
+					success = true
+					break
+				end
+			end
+			if not success then
+				for i = 1,6 do
+					if e[2] == sides[i] then
+						peris["sides"][sides[i]] = nil
+						break
+					end
+				end
+			end
+
+			if e[2] == pointer then
+				clear()
+				term.setTextColor(colors.red)
+				term.setCursorPos(1,3)
+				term.write("Peripheral removed!")
+				sleep(3)
+				break
+			end
+		elseif e[1] == "note_center" then
+			table.insert(notemsgs,e[2])
+			unreadnotes = true
+			drawTopBar()
+		elseif e[1] == "key" and e[2] == keys.q then
+			RUNNING = false
+			break
+		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+		end
+	end
 end
 
 
@@ -560,6 +676,240 @@ end
 
 local function modemPeripheral(pointer)
 	displaymenu = "mainmodem"
+
+	local channels = {}
+
+	if peripheral.call(pointer, "isWireless") then
+		dispname = "Wireless Modem"
+		peritype = "wmodem"
+	else
+		dispname = "Wired Modem"
+		peritype = "modem"
+	end
+
+	local function sortNumbers(input)
+		local terms = {}
+		local range = {}
+		if string.find(input, " ") then
+			local termstart = 1
+			for i = 1,input:len() do
+				if string.sub(input,i,i) == " " then
+					table.insert(terms, string.sub(input,termstart,i-1))
+					termstart = i+1
+				end
+			end
+		end
+		for i = 1,#terms do
+			if string.find(terms[i], "-") then -- range
+				local ref = terms[i]
+				for l = 1,ref:len() do
+					if string.sub(ref,l,l) == "-" then
+						local termstart = string.sub(ref,1,l-1)
+						local termend = string.sub(ref,l+1,ref:len())
+						if termend-termstart < 129 then
+							for n = termstart,termend do
+								table.insert(range,n)
+							end
+						end
+					end
+				end
+			else
+				table.insert(range, terms[i])
+			end
+		end
+		return range
+	end
+
+	local function reverseSort(range)
+		local terms = ""
+		local termstart = range[1]
+		local nextterm = termstart
+		for i = 1,#range do
+			nextterm = nextterm+1
+			if range[i+1] ~= nextterm then
+				if nextterm-termstart > 1 then
+					terms = terms .. termstart.."-"..nextterm..","
+				else
+					terms = terms .. termstart..","
+				end
+				termstart = range[i+1]
+			end
+		end
+		return terms
+	end
+
+	local function removeChannel(chan)
+		peripheral.call(pointer, "close", tonumber(chan))
+		for i = 1,#channels do
+			if chan == channels[i] then
+				table.remove(channels, i)
+				break
+			end
+		end
+	end
+
+	local function clear()
+		term.setBackgroundColor(colors.white)
+		term.clear()
+		drawTopBar()
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+	end
+	local function draw()
+		clear()
+		term.setBackgroundColor(colors.lightGray)
+		term.setTextColor(colors.white)
+		term.setCursorPos(1,2)
+		term.write(" << Back ")
+
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+		term.setCursorPos(3,4)
+		term.write(dispname)
+		drawPeri(peritype,3,5)
+		term.setBackgroundColor(colors.white)
+		term.setCursorPos(10,6)
+		term.write("Name: "..pointer)
+		term.setCursorPos(10,7)
+		term.write("Open Channels: ")
+		term.setCursorPos(10,8)
+		term.write(reverseSort(channels))
+
+		term.setBackgroundColor(colors.gray)
+		term.setTextColor(colors.white)
+		term.setCursorPos(5,11)
+		term.write(" Open channel ")
+		term.setCursorPos(5,13)
+		term.write(" Close channel ")
+		term.setCursorPos(5,15)
+		term.write(" Close all ")
+		term.setCursorPos(5,17)
+		term.write(" Send ")
+	end
+	draw()
+	while true do
+		local e = {os.pullEvent()}
+		if e[1] == "mouse_click" and e[2] == 1 then
+			if e[3] == w and e[4] == 1 then
+				RUNNING = false
+				break
+			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
+				break
+			elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+				displaymenu = "notecenter"
+				drawNotes()
+				displaymenu = "mainmonitor"
+				draw()
+			elseif e[3] >= 5 and e[3] <= 18 and e[4] == 11 then -- open channel
+				term.setBackgroundColor(colors.lightGray)
+				term.setTextColor(colors.white)
+				local cenx = (w-10)/2
+				local ceny = (h-4)/2
+				term.setCursorPos(cenx,ceny)
+				term.write("Open      ")
+				term.setCursorPos(cenx,ceny+1)
+				term.write("          ")
+				term.setCursorPos(cenx,ceny+2)
+				term.write("          ")
+				term.setCursorPos(cenx,ceny+3)
+				term.write("          ")
+
+				term.setCursorPos(cenx+1,ceny+2)
+				local input = read()
+				if input ~= "" then
+					if string.find(input, "-") or string.find(input, " ") then
+						local newchannels = sortNumbers(input)
+						for i = 1,#newchannels do
+							if not peripheral.call(pointer, "isOpen", newchannels[i]) then
+								peripheral.call(pointer, "open", newchannels[i])
+							end
+						end
+					else
+						peripheral.call(pointer, "open", tonumber(input))
+						table.insert(channels, input)
+					end
+				end
+				draw()
+			elseif e[3] >= 5 and e[3] <= 19 and e[4] == 13 then -- close channel
+				term.setBackgroundColor(colors.lightGray)
+				term.setTextColor(colors.white)
+				local cenx = (w-10)/2
+				local ceny = (h-4)/2
+				term.setCursorPos(cenx,ceny)
+				term.write("Close     ")
+				term.setCursorPos(cenx,ceny+1)
+				term.write("          ")
+				term.setCursorPos(cenx,ceny+2)
+				term.write("          ")
+				term.setCursorPos(cenx,ceny+3)
+				term.write("          ")
+
+				term.setCursorPos(cenx+1,ceny+2)
+				local input = read()
+				if input ~= "" then
+					if string.find(input, "-") or string.find(input, " ") then
+						local newchannels = sortNumbers(input)
+						for i = 1,#newchannels do
+							peripheral.call(pointer, "close", newchannels[i])
+						end
+					else
+						removeChannel(input)
+					end
+				end
+				draw()
+			elseif e[3] >= 5 and e[3] <= 15 and e[4] == 15 then -- close all
+				peripheral.call(pointer, "closeAll")
+				channels = {}
+				draw()
+			elseif e[3] >= 5 and e[3] <= 11 and e[4] == 17 then -- send
+				clear()
+				term.setCursorPos(2,3)
+				term.write("Coming soon...")
+				sleep(3)
+				draw()
+			end
+		elseif e[1] == "term_resize" then
+			w,h = term.getSize()
+			drawScreen()
+		elseif e[1] == "peripheral" then
+			scanPeripherals(e[2])
+		elseif e[1] == "peripheral_detach" then
+			local success = false
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			for i = 1,#peris["network"] do
+				if e[2] == peris["network"][i] then
+					table.remove(peris["network"], i)
+					success = true
+					break
+				end
+			end
+			if not success then
+				for i = 1,6 do
+					if e[2] == sides[i] then
+						peris["sides"][sides[i]] = nil
+						break
+					end
+				end
+			end
+
+			if e[2] == pointer then
+				clear()
+				term.setTextColor(colors.red)
+				term.setCursorPos(1,3)
+				term.write("Peripheral removed!")
+				sleep(3)
+				break
+			end
+		elseif e[1] == "note_center" then
+			table.insert(notemsgs,e[2])
+			unreadnotes = true
+			drawTopBar()
+		elseif e[1] == "key" and e[2] == keys.q then
+			RUNNING = false
+			break
+		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+		end
+	end
 end
 
 
