@@ -1,4 +1,6 @@
 --[[ Peripheral Manager by LegoStax
+	Peripheral functions: line 228
+
 	TODO:
 	- add about page for each peripheral type
 	- add features for each peripheral type
@@ -227,10 +229,29 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local function drivePeripheral(pointer)
 	displaymenu = "maindrive"
-	logmsg("directed to drivePeripheral()")
-	logmsg("pointer = "..pointer)
 
 	local isPlaying = false
 	local label = nil
@@ -315,7 +336,7 @@ local function drivePeripheral(pointer)
 			if e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
 				displaymenu = "notecenter"
 				drawNotes()
-				displaymenu = "main"
+				displaymenu = "maindrive"
 				draw()
 			elseif e[3] == w and e[4] == 1 then
 				RUNNING = false
@@ -399,6 +420,7 @@ local function drivePeripheral(pointer)
 				term.setCursorPos(1,3)
 				term.write("Peripheral removed!")
 				sleep(3)
+				break
 			end
 		elseif e[1] == "note_center" then
 			table.insert(notemsgs,e[2])
@@ -417,8 +439,112 @@ end
 
 local function printerPeripheral(pointer)
 	displaymenu = "mainprinter"
-	logmsg("directed to printerPeripheral()")
-	logmsg("pointer = "..pointer)
+
+	local function clear()
+		term.setBackgroundColor(colors.white)
+		term.clear()
+		drawTopBar()
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+	end
+	local function draw()
+		clear()
+		term.setBackgroundColor(colors.lightGray)
+		term.setTextColor(colors.white)
+		term.setCursorPos(1,2)
+		term.write(" << Back ")
+
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+		term.setCursorPos(3,4)
+		term.write("Printer")
+		drawPeri("printer",3,5)
+		term.setBackgroundColor(colors.white)
+		term.setCursorPos(10,6)
+		term.write("Name: "..pointer)
+		term.setCursorPos(10,7)
+		term.write("Ink level: "..peripheral.call(pointer, "getInkLevel").."/64")
+		term.setCursorPos(10,8)
+		term.write("Paper level: "..peripheral.call(pointer, "getPaperLevel").."/384")
+		term.setCursorPos(10,9)
+		term.write("Paper size: 25x21")
+
+		if peripheral.call(pointer, "getInkLevel") < 1 or peripheral.call(pointer, "getPaperLevel") < 1 then
+			term.setBackgroundColor(colors.red)
+		else
+			term.setBackgroundColor(colors.gray)
+		end
+		term.setTextColor(colors.white)
+		term.setCursorPos(5,11)
+		term.write(" Print from File ")
+	end
+	draw()
+	while true do
+		local e = {os.pullEvent()}
+		if e[1] == "mouse_click" and e[2] == 1 then
+			if e[3] == w and e[4] == 1 then
+				RUNNING = false
+				break
+			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
+				break
+			elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+				displaymenu = "notecenter"
+				drawNotes()
+				displaymenu = "mainprinter"
+				draw()
+			elseif e[3] >= 5 and e[3] <= 21 and e[4] == 11 then
+				if peripheral.call(pointer, "getInkLevel") > 0 and peripheral.call(pointer, "getPaperLevel") > 0 then
+					clear()
+					term.setCursorPos(2,3)
+					term.write("Coming soon...")
+					sleep(3)
+					draw()
+				else
+					draw()
+				end
+			end
+		elseif e[1] == "term_resize" then
+			w,h = term.getSize()
+			drawScreen()
+		elseif e[1] == "peripheral" then
+			scanPeripherals(e[2])
+		elseif e[1] == "peripheral_detach" then
+			local success = false
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			for i = 1,#peris["network"] do
+				if e[2] == peris["network"][i] then
+					table.remove(peris["network"], i)
+					success = true
+					break
+				end
+			end
+			if not success then
+				for i = 1,6 do
+					if e[2] == sides[i] then
+						peris["sides"][sides[i]] = nil
+						break
+					end
+				end
+			end
+
+			if e[2] == pointer then
+				clear()
+				term.setTextColor(colors.red)
+				term.setCursorPos(1,3)
+				term.write("Peripheral removed!")
+				sleep(3)
+				break
+			end
+		elseif e[1] == "note_center" then
+			table.insert(notemsgs,e[2])
+			unreadnotes = true
+			drawTopBar()
+		elseif e[1] == "key" and e[2] == keys.q then
+			RUNNING = false
+			break
+		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+		end
+	end
 end
 
 
@@ -426,8 +552,6 @@ end
 
 local function monitorPeripheral(pointer)
 	displaymenu = "mainmonitor"
-	logmsg("directed to monitorPeripheral()")
-	logmsg("pointer = "..pointer)
 end
 
 
@@ -436,9 +560,29 @@ end
 
 local function modemPeripheral(pointer)
 	displaymenu = "mainmodem"
-	logmsg("directed to modemPeripheral()")
-	logmsg("pointer = "..pointer)
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -459,10 +603,7 @@ local function redirectToType(pointer, isSide)
 		displaymenu = "main"
 	else
 		local undscrpos = string.find(pointer, "_")
-		logmsg("pointer = "..pointer)
-		logmsg("undscrpos = "..undscrpos)
 		local ref = string.sub(pointer, 1, undscrpos-1)
-		logmsg("ref = "..ref)
 		if ref == "drive" then
 			drivePeripheral(pointer)
 		elseif ref == "printer" then
@@ -723,7 +864,6 @@ local function drawPeripherals()
 							if data[pos] == "top" or data[pos] == "bottom" or data[pos] == "front" or data[pos] == "left" or data[pos] == "right" or data[pos] == "back" then
 								redirectToType(data[pos], true)
 							else
-								logmsg("redirectToType(networkperi)")
 								redirectToType(data[pos])
 							end
 							displaymenu = "mainall"
