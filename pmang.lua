@@ -184,6 +184,44 @@ local function scanPeripherals(p)
 		end
 	end
 end
+local function drawTopBar()
+	term.setTextColor(colors.white)
+	term.setBackgroundColor(colors.gray)
+	term.setCursorPos(1,1)
+	term.clearLine()
+	if w < 26 then
+		term.write(" pmang")
+	else
+		term.write(" Peripheral Manager")
+	end
+	term.setCursorPos(w-5,1)
+	noteiconxpos = w-5
+	if unreadnotes then term.setBackgroundColor(colors.yellow) end
+	term.write(" ! ")
+	term.setBackgroundColor(colors.red)
+	term.setCursorPos(w,1)
+	term.write("X")
+end
+local function drawPeri(t,xpos,ypos)
+	term.setTextColor(colors.black)
+
+	for y = 1,4 do
+		for x = 1,5 do
+			local pos = string.sub(pcolor[t][y], x, x)
+			if pos == "0" then
+				term.setBackgroundColor(colors.black)
+			elseif pos == "1" then
+				term.setBackgroundColor(colors.gray)
+			elseif pos == "2" then
+				term.setBackgroundColor(colors.lightGray)
+			elseif pos == "3" then
+				term.setBackgroundColor(colors.yellow)
+			end
+			term.setCursorPos(x+(xpos-1), y+ypos)
+			term.write(string.sub(ptxt[t][y], x, x))
+		end
+	end
+end
 
 -- Peripheral Functions
 
@@ -193,6 +231,185 @@ local function drivePeripheral(pointer)
 	displaymenu = "maindrive"
 	logmsg("directed to drivePeripheral()")
 	logmsg("pointer = "..pointer)
+
+	local isPlaying = false
+	local label = nil
+
+	local function clear()
+		term.setBackgroundColor(colors.white)
+		term.clear()
+		drawTopBar()
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+	end
+	local function draw()
+		clear()
+		term.setBackgroundColor(colors.lightGray)
+		term.setTextColor(colors.white)
+		term.setCursorPos(1,2)
+		term.write(" << Back ")
+
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+		term.setCursorPos(3,4)
+		term.write("Disk Drive")
+		drawPeri("drive",3,5)
+		term.setBackgroundColor(colors.white)
+		term.setCursorPos(10,6)
+		term.write("Name: "..pointer)
+		term.setCursorPos(10,7)
+		if not peripheral.call(pointer, "isDiskPresent") then -- if there's a disk
+			term.setTextColor(colors.red)
+			term.write("No disk!")
+		else
+			if peripheral.call(pointer, "hasAudio") then -- if it's a music disk
+				term.write("Title: "..peripheral.call(pointer, "getAudioTitle"))
+				if not isPlaying then
+					term.setBackgroundColor(colors.lime)
+					term.setTextColor(colors.white)
+					term.setCursorPos(5,13)
+					term.write(" Play ")
+				else
+					term.setBackgroundColor(colors.red)
+					term.setTextColor(colors.white)
+					term.setCursorPos(5,13)
+					term.write(" Stop ")
+				end
+			else
+				local mount = peripheral.call(pointer, "getMountPath")
+				term.write("Mount point: "..mount)
+				term.setCursorPos(10,8)
+				term.write("ID: "..peripheral.call(pointer, "getDiskID"))
+				term.setCursorPos(10,9)
+				label = peripheral.call(pointer, "getDiskLabel")
+				if label then
+					term.write("Label: "..label)
+				else
+					term.write("Label: ")
+					term.setTextColor(colors.lightGray)
+					term.write("none")
+					term.setTextColor(colors.black)
+				end
+				term.setCursorPos(10,10)
+				local total = (fs.getSize(mount) + fs.getFreeSpace(mount))/1000
+				term.write("Taken space: "..fs.getSize(mount).."/"..total.." KB")
+
+				term.setBackgroundColor(colors.gray)
+				term.setTextColor(colors.white)
+				term.setCursorPos(5,13)
+				term.write(" Set Label ")
+
+				term.setCursorPos(5,15)
+				term.write(" Copy/Move Files ")
+			end
+			term.setBackgroundColor(colors.gray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(5,11)
+			term.write(" Eject ")
+		end
+	end
+	draw()
+	while true do
+		local e = {os.pullEvent()}
+		if e[1] == "mouse_click" and e[2] == 1 then
+			if e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+				displaymenu = "notecenter"
+				drawNotes()
+				displaymenu = "main"
+				draw()
+			elseif e[3] == w and e[4] == 1 then
+				RUNNING = false
+				break
+			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
+				break
+			elseif e[3] >= 5 and e[3] <= 11 and e[4] == 11 then
+				peripheral.call(pointer, "ejectDisk")
+			elseif e[3] >= 5 and e[3] <= 10 and e[4] == 13 and peripheral.call(pointer, "hasAudio") then
+				if isPlaying then
+					peripheral.call(pointer, "stopAudio")
+				else
+					peripheral.call(pointer, "playAudio")
+				end
+				isPlaying = not isPlaying
+				draw()
+			elseif e[3] >= 5 and e[3] <= 15 and e[4] == 13 then
+				term.setBackgroundColor(colors.lightGray)
+				term.setTextColor(colors.white)
+				local cenx = (w-10)/2
+				local ceny = (h-4)/2
+				term.setCursorPos(cenx,ceny)
+				term.write("Set Label ")
+				term.setCursorPos(cenx,ceny+1)
+				term.write("          ")
+				term.setCursorPos(cenx,ceny+2)
+				term.write("          ")
+				term.setCursorPos(cenx,ceny+3)
+				term.write("          ")
+				if label then
+					for i = 1,label:len() do
+						os.queueEvent("char", string.sub(label,i,i))
+					end
+				end
+				term.setCursorPos(cenx+1,ceny+2)
+				local input = read()
+				if input == "" then
+					input = nil
+				end
+				peripheral.call(pointer, "setDiskLabel", input)
+				draw()
+			elseif e[3] >= 5 and e[3] <= 21 and e[4] == 15 then
+				clear()
+				term.setCursorPos(2,3)
+				term.write("Coming soon...")
+				sleep(3)
+				draw()
+			end
+		elseif e[1] == "disk" then
+			draw()
+		elseif e[1] == "disk_eject" then
+			draw()
+			isPlaying = false
+		elseif e[1] == "term_resize" then
+			w,h = term.getSize()
+			drawScreen()
+		elseif e[1] == "peripheral" then
+			scanPeripherals(e[2])
+		elseif e[1] == "peripheral_detach" then
+			local success = false
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			for i = 1,#peris["network"] do
+				if e[2] == peris["network"][i] then
+					table.remove(peris["network"], i)
+					success = true
+					break
+				end
+			end
+			if not success then
+				for i = 1,6 do
+					if e[2] == sides[i] then
+						peris["sides"][sides[i]] = nil
+						break
+					end
+				end
+			end
+
+			if e[2] == pointer then
+				clear()
+				term.setTextColor(colors.red)
+				term.setCursorPos(1,3)
+				term.write("Peripheral removed!")
+				sleep(3)
+			end
+		elseif e[1] == "note_center" then
+			table.insert(notemsgs,e[2])
+			unreadnotes = true
+			drawTopBar()
+		elseif e[1] == "key" and e[2] == keys.q then
+			RUNNING = false
+			break
+		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+		end
+	end
 end
 
 
@@ -239,6 +456,7 @@ local function redirectToType(pointer, isSide)
 		elseif ref == "modem" or ref == "wmodem" then
 			modemPeripheral(pointer)
 		end
+		displaymenu = "main"
 	else
 		local undscrpos = string.find(pointer, "_")
 		logmsg("pointer = "..pointer)
@@ -263,45 +481,6 @@ end
 
 
 -- Main menu
-local function drawPeri(t,xpos,ypos)
-	term.setTextColor(colors.black)
-
-	for y = 1,4 do
-		for x = 1,5 do
-			local pos = string.sub(pcolor[t][y], x, x)
-			if pos == "0" then
-				term.setBackgroundColor(colors.black)
-			elseif pos == "1" then
-				term.setBackgroundColor(colors.gray)
-			elseif pos == "2" then
-				term.setBackgroundColor(colors.lightGray)
-			elseif pos == "3" then
-				term.setBackgroundColor(colors.yellow)
-			end
-			term.setCursorPos(x+(xpos-1), y+ypos)
-			term.write(string.sub(ptxt[t][y], x, x))
-		end
-	end
-end
-
-local function drawTopBar()
-	term.setTextColor(colors.white)
-	term.setBackgroundColor(colors.gray)
-	term.setCursorPos(1,1)
-	term.clearLine()
-	if w < 26 then
-		term.write(" pmang")
-	else
-		term.write(" Peripheral Manager")
-	end
-	term.setCursorPos(w-5,1)
-	noteiconxpos = w-5
-	if unreadnotes then term.setBackgroundColor(colors.yellow) end
-	term.write(" ! ")
-	term.setBackgroundColor(colors.red)
-	term.setCursorPos(w,1)
-	term.write("X")
-end
 local function box(startx,starty)
 
 	-- Box width: 11
@@ -431,7 +610,15 @@ local function drawPeripherals()
 		local scrollpos = 1
 		local pospossible = 1
 		local data = {}
+		local function clear()
+			term.setBackgroundColor(colors.white)
+			term.clear()
+			drawTopBar()
+			term.setBackgroundColor(colors.white)
+			term.setTextColor(colors.black)
+		end
 		local function draw()
+			clear()
 			term.setBackgroundColor(colors.lightGray)
 			term.setTextColor(colors.white)
 			term.setCursorPos(1,2)
@@ -476,7 +663,7 @@ local function drawPeripherals()
 			end
 		end
 		draw()
-		while true do -- MAINALL handler
+		while RUNNING do -- MAINALL handler
 			local e = {os.pullEvent()}
 			if e[1] == "term_resize" then
 				w,h = term.getSize()
@@ -539,6 +726,8 @@ local function drawPeripherals()
 								logmsg("redirectToType(networkperi)")
 								redirectToType(data[pos])
 							end
+							displaymenu = "mainall"
+							draw()
 						end
 					end
 				end
@@ -704,16 +893,22 @@ local function evtHandler()
 			elseif displaymenu == "main" and displaymode == "full" then -- click detection for full boxes
 				if e[3] >= boxes.top.x and e[3] <= boxes.top.x+10 and e[4] >= boxes.top.y and e[4] <= boxes.top.y+6 then -- TOP
 					redirectToType("top", true)
+					drawScreen()
 				elseif e[3] >= boxes.bottom.x and e[3] <= boxes.bottom.x+10 and e[4] >= boxes.bottom.y and e[4] <= boxes.bottom.y+6 then -- BOTTOM
 					redirectToType("bottom", true)
+					drawScreen()
 				elseif e[3] >= boxes.front.x and e[3] <= boxes.front.x+10 and e[4] >= boxes.front.y and e[4] <= boxes.front.y+6 then -- FRONT
 					redirectToType("front", true)
+					drawScreen()
 				elseif e[3] >= boxes.left.x and e[3] <= boxes.left.x+10 and e[4] >= boxes.left.y and e[4] <= boxes.left.y+6 then -- LEFT
 					redirectToType("left", true)
+					drawScreen()
 				elseif e[3] >= boxes.right.x and e[3] <= boxes.right.x+10 and e[4] >= boxes.right.y and e[4] <= boxes.right.y+6 then -- RIGHT
 					redirectToType("right", true)
+					drawScreen()
 				elseif e[3] >= boxes.back.x and e[3] <= boxes.back.x+10 and e[4] >= boxes.back.y and e[4] <= boxes.back.y+6 then -- BACK
 					redirectToType("back", true)
+					drawScreen()
 				end
 			end
 		elseif e[1] == "key" and e[2] == keys.q then break
