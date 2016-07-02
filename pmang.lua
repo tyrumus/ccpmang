@@ -863,8 +863,7 @@ local function drivePeripheral(pointer)
 					term.setTextColor(colors.black)
 				end
 				term.setCursorPos(10,10)
-				local total = (fs.getSize(mount) + fs.getFreeSpace(mount))/1000
-				term.write("Taken space: "..fs.getSize(mount).."/"..total.." KB")
+				term.write("Free space: "..(fs.getFreeSpace(mount)/1000).." KB")
 
 				term.setBackgroundColor(colors.gray)
 				term.setTextColor(colors.white)
@@ -947,10 +946,18 @@ local function drivePeripheral(pointer)
 				end
 			end
 		elseif e[1] == "disk" then
-			draw()
+			if e[2] == pointer then
+				draw()
+			else
+				createNote(e[2], "Disk inserted")
+			end
 		elseif e[1] == "disk_eject" then
-			draw()
-			isPlaying = false
+			if e[2] == pointer then
+				draw()
+				isPlaying = false
+			else
+				createNote(e[2], "Disk ejected")
+			end
 		elseif e[1] == "term_resize" then
 			w,h = term.getSize()
 			drawTopBar()
@@ -988,10 +995,6 @@ local function drivePeripheral(pointer)
 			end
 		elseif e[1] == "note_center" then
 			drawTopBar()
-		elseif e[1] == "disk" then
-			createNote(e[2], "Disk inserted")
-		elseif e[1] == "disk_eject" then
-			createNote(e[2], "Disk ejected")
 		elseif e[1] == "monitor_resize" then
 			local mw,mh = peripheral.call(e[2], "getSize")
 			createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
