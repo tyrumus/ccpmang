@@ -1,6 +1,7 @@
 --[[ Peripheral Manager by LegoStax
 	TODO:
-	- Detect and display peripherals on network
+	- add about page for each peripheral type
+	- add features for each peripheral type
 ]]--
 
 -- Init variables
@@ -183,6 +184,84 @@ local function scanPeripherals(p)
 		end
 	end
 end
+
+-- Peripheral Functions
+
+
+
+local function drivePeripheral(pointer)
+	displaymenu = "maindrive"
+	logmsg("directed to drivePeripheral()")
+	logmsg("pointer = "..pointer)
+end
+
+
+
+
+local function printerPeripheral(pointer)
+	displaymenu = "mainprinter"
+	logmsg("directed to printerPeripheral()")
+	logmsg("pointer = "..pointer)
+end
+
+
+
+
+local function monitorPeripheral(pointer)
+	displaymenu = "mainmonitor"
+	logmsg("directed to monitorPeripheral()")
+	logmsg("pointer = "..pointer)
+end
+
+
+
+
+
+local function modemPeripheral(pointer)
+	displaymenu = "mainmodem"
+	logmsg("directed to modemPeripheral()")
+	logmsg("pointer = "..pointer)
+end
+
+
+
+
+
+local function redirectToType(pointer, isSide)
+	if isSide then
+		local ref = peris["sides"][pointer]
+		if ref == "drive" then
+			drivePeripheral(pointer)
+		elseif ref == "printer" then
+			printerPeripheral(pointer)
+		elseif ref == "monitor" or ref == "amonitor" then
+			monitorPeripheral(pointer)
+		elseif ref == "modem" or ref == "wmodem" then
+			modemPeripheral(pointer)
+		end
+	else
+		local undscrpos = string.find(pointer, "_")
+		logmsg("pointer = "..pointer)
+		logmsg("undscrpos = "..undscrpos)
+		local ref = string.sub(pointer, 1, undscrpos-1)
+		logmsg("ref = "..ref)
+		if ref == "drive" then
+			drivePeripheral(pointer)
+		elseif ref == "printer" then
+			printerPeripheral(pointer)
+		elseif ref == "monitor" then
+			monitorPeripheral(pointer)
+		elseif ref == "modem" then
+			modemPeripheral(pointer)
+		end
+	end
+end
+
+
+
+
+
+
 -- Main menu
 local function drawPeri(t,xpos,ypos)
 	term.setTextColor(colors.black)
@@ -450,6 +529,18 @@ local function drawPeripherals()
 					drawNotes()
 					displaymenu = "mainall"
 					draw()
+				elseif e[4] >= 3 then
+					pos = (e[4]-3)+scrollpos
+					if pos <= #data then
+						if e[3] >= 2 and e[3] <= data[pos]:len() then -- selected peripheral
+							if data[pos] == "top" or data[pos] == "bottom" or data[pos] == "front" or data[pos] == "left" or data[pos] == "right" or data[pos] == "back" then
+								redirectToType(data[pos], true)
+							else
+								logmsg("redirectToType(networkperi)")
+								redirectToType(data[pos])
+							end
+						end
+					end
 				end
 			end
 		end
@@ -610,6 +701,20 @@ local function evtHandler()
 				drawNotes()
 				displaymenu = "main"
 				drawScreen()
+			elseif displaymenu == "main" and displaymode == "full" then -- click detection for full boxes
+				if e[3] >= boxes.top.x and e[3] <= boxes.top.x+10 and e[4] >= boxes.top.y and e[4] <= boxes.top.y+6 then -- TOP
+					redirectToType("top", true)
+				elseif e[3] >= boxes.bottom.x and e[3] <= boxes.bottom.x+10 and e[4] >= boxes.bottom.y and e[4] <= boxes.bottom.y+6 then -- BOTTOM
+					redirectToType("bottom", true)
+				elseif e[3] >= boxes.front.x and e[3] <= boxes.front.x+10 and e[4] >= boxes.front.y and e[4] <= boxes.front.y+6 then -- FRONT
+					redirectToType("front", true)
+				elseif e[3] >= boxes.left.x and e[3] <= boxes.left.x+10 and e[4] >= boxes.left.y and e[4] <= boxes.left.y+6 then -- LEFT
+					redirectToType("left", true)
+				elseif e[3] >= boxes.right.x and e[3] <= boxes.right.x+10 and e[4] >= boxes.right.y and e[4] <= boxes.right.y+6 then -- RIGHT
+					redirectToType("right", true)
+				elseif e[3] >= boxes.back.x and e[3] <= boxes.back.x+10 and e[4] >= boxes.back.y and e[4] <= boxes.back.y+6 then -- BACK
+					redirectToType("back", true)
+				end
 			end
 		elseif e[1] == "key" and e[2] == keys.q then break
 		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
