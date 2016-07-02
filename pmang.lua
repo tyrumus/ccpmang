@@ -1,11 +1,9 @@
 --[[ Peripheral Manager by LegoStax
-	Peripheral functions: line 228
+	Peripheral functions: line 486
 
 	TODO:
 	- fix channel range sorter
 	- add about page for type computer
-	- add explorer function
-	- add copy/move files to/from disk
 	- add print from file
 	- add run program on monitor
 	- add send and receive messages
@@ -22,7 +20,7 @@ end
 local w,h = 51,19
 local displaymode = "full"
 local displaymenu = "main"
-local RUNNING = true
+local pmang = {RUNNING = true}
 local networkperis = false
 
 local noteiconxpos = 0
@@ -211,7 +209,7 @@ local function drawTopBar()
 	noteiconxpos = w-5
 	if unreadnotes then term.setBackgroundColor(colors.yellow) end
 	term.write(" ! ")
-	term.setBackgroundColor(colors.red)
+	term.setBackgroundColor(colors.lime)
 	term.setCursorPos(w,1)
 	term.write("X")
 end
@@ -233,6 +231,306 @@ local function drawPeri(t,xpos,ypos)
 			term.setCursorPos(x+(xpos-1), y+ypos)
 			term.write(string.sub(ptxt[t][y], x, x))
 		end
+	end
+end
+
+local function explorerDialog(pointer, canDir)
+	if not canDir then canDir = false end
+	local RUNNING = true
+	local PATH = "/"
+	local beginFiles = 0
+	local scrollpos = 1
+	local greatestpos = 1
+	local pospossible = 1
+	local oldItems = nil
+	local pos = nil
+	local selectedItem = -1
+	local returnpath = ""
+	local selectedPath = "/"
+
+	local function clear(bg)
+		bg = bg or colors.black
+		term.setBackgroundColor(bg)
+		term.clear()
+		term.setCursorPos(1,1)
+	end
+
+	local function drawTopBar()
+		term.setTextColor(colors.white)
+		term.setBackgroundColor(colors.gray)
+		term.setCursorPos(1,1)
+		term.clearLine()
+		if w < 16 then
+			term.write(" exp")
+		else
+			term.write(" Explorer")
+		end
+		term.setCursorPos(w-5,1)
+		noteiconxpos = w-5
+		if unreadnotes then term.setBackgroundColor(colors.yellow) end
+		term.write(" ! ")
+		term.setBackgroundColor(colors.lime)
+		term.setCursorPos(w,1)
+		term.write("X")
+	end
+
+	local function printPos(msg,x,y,bg,fg)
+		if bg then term.setBackgroundColor(bg) end
+		if fg then term.setTextColor(fg) end
+		term.setCursorPos(x,y)
+		term.write(msg)
+	end
+
+	local function listFiles(d)
+		local dir = nil
+		if d then
+			dir = shell.resolve(d)
+		else
+			dir = shell.dir()
+		end
+
+		local all = fs.list(dir)
+		local files = {}
+		local folders = {}
+		local hidden = settings.get("list.show_hidden")
+		for n, item in pairs(all) do
+			if hidden or string.sub(item,1,1) ~= "." then
+				local path = fs.combine(dir, item)
+				if fs.isDir(path) then
+					table.insert(folders, item)
+				else
+					table.insert(files, item)
+				end
+			end
+		end
+		table.sort(folders)
+		table.sort(files)
+		return folders, files
+	end
+
+	local function calculateItems()
+		local folders, files = listFiles(PATH)
+		local items = folders
+		beginFiles = #folders+1
+		for i = 1,#files do
+			table.insert(items,files[i])
+		end
+		-- calculate greatestpos
+		for i = 1,#items do
+			if items[i]:len() > greatestpos then
+				greatestpos = items[i]:len()
+			end
+		end
+		pospossible = #items-(h-6)
+		return items
+	end
+
+	local function drawCurrentPath()
+		term.setBackgroundColor(colors.lightGray)
+		term.setCursorPos(1,2)
+		term.clearLine()
+		printPos(" <  "..PATH,1,2,colors.lightGray)
+	end
+
+	local function drawItems(items)
+		if not items then
+			items = oldItems
+		end
+		oldItems = items
+
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.blue)
+		term.setCursorPos(5,3)
+		for i = scrollpos,#items do
+			if i > #items then break end
+			if i == beginFiles then term.setTextColor(colors.black) end
+			if i == selectedItem then
+				term.setBackgroundColor(colors.blue)
+				term.setTextColor(colors.white)
+			else
+				term.setBackgroundColor(colors.white)
+				if i < beginFiles then term.setTextColor(colors.blue)
+				else term.setTextColor(colors.black) end
+			end
+			term.write(items[i])
+			term.setBackgroundColor(colors.white)
+			for i = 1,greatestpos do term.write(" ") end
+			local x,y = term.getCursorPos()
+			y = y+1
+			term.setCursorPos(5,y)
+			if y > h-3 then break end
+		end
+	end
+
+	local function drawBottomBar()
+		term.setBackgroundColor(colors.gray)
+		for i = h-2,h do
+			term.setCursorPos(1,i)
+			term.clearLine()
+		end
+		printPos(" Filename: ",1,h-1,colors.gray,colors.white)
+		if selectedPath ~= "" then
+			printPos(selectedPath,12,h-1)
+		end
+		printPos(" Select ",w-8,h,colors.lightGray)
+	end
+
+	local function animSelected(msg,x,y,bg,fg)
+		printPos(msg,x,y,bg,fg)
+		sleep(0.1)
+	end
+
+	local function drawScreen()
+		clear(colors.white)
+		drawTopBar()
+		drawCurrentPath()
+		drawItems(calculateItems())
+		drawBottomBar()
+		WALL = ""
+	end
+
+	drawScreen()
+
+	while RUNNING and pmang.RUNNING do
+		local e = {os.pullEvent()}
+		if e[1] == "mouse_click" and e[2] == 1 and e[3] == w and e[4] == 1 then
+			RUNNING = false
+			pmang.RUNNING = false
+			break
+		elseif e[1] == "key" and e[2] == keys.q then
+			RUNNING = false
+			pmang.RUNNING = false
+			break
+		elseif e[1] == "mouse_scroll" then
+			if e[2] == 1 and scrollpos < pospossible then
+				scrollpos = scrollpos+1
+			elseif e[2] == -1 and scrollpos > 1 then
+				scrollpos = scrollpos-1
+			end
+			drawItems()
+		elseif e[1] == "mouse_click" and e[2] == 1 and e[3] >= 1 and e[3] <= 3 and e[4] == 2 then
+			animSelected(" < ",1,2,colors.gray,colors.lightGray)
+			if PATH ~= "/" then
+				for i = PATH:len()-1,1,-1 do
+					if string.sub(PATH,i,i) == "/" then
+						PATH = string.sub(PATH,1,i)
+						break
+					end
+				end
+				selectedItem = -1
+				scrollpos = 1
+				drawScreen()
+			else
+				printPos(" < ",1,2,colors.lightGray,colors.white)
+			end
+		elseif e[1] == "mouse_click" then
+			if e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+				displaymenu = "notecenter"
+				drawNotes()
+				displaymenu = "explorerdialog"
+				drawScreen()
+			elseif e[3] >= w-8 and e[3] <= w and e[4] == h and selectedPath ~= "" then -- select button
+				returnpath = selectedPath
+				RUNNING = false
+				break
+			elseif e[4] >= 3 then
+				pos = (e[4]-3)+scrollpos
+				if pos <= #oldItems then
+					if e[3] >= 5 and e[3] <= oldItems[pos]:len()+4 then
+						if pos == selectedItem then
+							if pos < beginFiles and e[2] == 1 then -- move into folder
+								PATH = PATH..oldItems[pos].."/"
+								selectedItem = -1
+								scrollpos = 1
+								drawScreen()
+							elseif pos >= beginFiles and e[2] == 1 then
+								if selectedPath == "/" then
+									if canDir then
+										returnpath = selectedPath
+										RUNNING = false
+										break
+									end
+								else
+									returnpath = selectedPath
+									RUNNING = false
+									break
+								end
+							end
+						else
+							selectedItem = pos
+							selectedPath = PATH..oldItems[pos]
+							if fs.isDir(selectedPath) and not canDir then
+								selectedPath = "/"
+							end
+							drawItems()
+							drawBottomBar()
+						end
+					else
+						selectedItem = -1
+						selectedPath = "/"
+						drawItems()
+						drawBottomBar()
+					end
+				else
+					selectedItem = -1
+					selectedPath = "/"
+					drawItems()
+					drawBottomBar()
+				end
+			end
+		elseif e[1] == "term_resize" then
+			w,h = term.getSize()
+			drawScreen()
+		elseif e[1] == "peripheral" then
+			scanPeripherals(e[2])
+		elseif e[1] == "peripheral_detach" then
+			local success = false
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			for i = 1,#peris["network"] do
+				if e[2] == peris["network"][i] then
+					table.remove(peris["network"], i)
+					success = true
+					break
+				end
+			end
+			if not success then
+				for i = 1,6 do
+					if e[2] == sides[i] then
+						peris["sides"][sides[i]] = nil
+						break
+					end
+				end
+			end
+
+			if e[2] == pointer then
+				clear()
+				term.setTextColor(colors.red)
+				term.setCursorPos(1,3)
+				term.write("Peripheral removed!")
+				sleep(3)
+				returnpath = "$$removed"
+				break
+			end
+		elseif e[1] == "note_center" then
+			table.insert(notemsgs,e[2])
+			unreadnotes = true
+			drawTopBar()
+		elseif e[1] == "key" and e[2] == keys.q then
+			pmang.RUNNING = false
+			break
+		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+		end
+	end
+
+
+
+	if pmang.RUNNING then
+		if fs.isDir(returnpath) then
+			returnpath = returnpath.."/"
+		end
+		return returnpath
+	else
+		return ""
 	end
 end
 
@@ -266,6 +564,7 @@ local function drivePeripheral(pointer)
 
 	local isPlaying = false
 	local label = nil
+	local RUNNING = true
 
 	local function clear()
 		term.setBackgroundColor(colors.white)
@@ -273,6 +572,179 @@ local function drivePeripheral(pointer)
 		drawTopBar()
 		term.setBackgroundColor(colors.white)
 		term.setTextColor(colors.black)
+	end
+	local function drawCopyMove()
+		local doCopy = true
+		local sourcepath = ""
+		local targetpath = ""
+		local cenx = 0
+		local returnvalue = true
+		local function draw()
+			clear()
+			term.setBackgroundColor(colors.lightGray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(1,2)
+			term.write(" << Back ")
+
+			term.setBackgroundColor(colors.white)
+			term.setTextColor(colors.black)
+			term.setCursorPos((w-17)/2,4)
+			term.write("Copy/Move File(s)")
+
+			term.setTextColor(colors.black)
+			if doCopy then
+				term.setBackgroundColor(colors.lime)
+			else
+				term.setBackgroundColor(colors.lightGray)
+			end
+			term.setCursorPos(3,6)
+			term.write(" ")
+			term.setBackgroundColor(colors.white)
+			term.write(" Copy")
+			if not doCopy then
+				term.setBackgroundColor(colors.lime)
+			else
+				term.setBackgroundColor(colors.lightGray)
+			end
+			term.setCursorPos(11,6)
+			term.write(" ")
+			term.setBackgroundColor(colors.white)
+			term.write(" Move")
+
+			term.setCursorPos(3,8)
+			term.write("Source: "..sourcepath)
+			term.setCursorPos(3,9)
+			term.write("Target: "..targetpath)
+
+			if sourcepath == "" then
+				term.setBackgroundColor(colors.red)
+			else
+				term.setBackgroundColor(colors.lime)
+			end
+			term.setTextColor(colors.white)
+			cenx = (w-20)/2
+			term.setCursorPos(cenx,11)
+			term.write(" Source ")
+			if targetpath == "" then
+				term.setBackgroundColor(colors.red)
+			else
+				term.setBackgroundColor(colors.lime)
+			end
+			term.setCursorPos(cenx+12,11)
+			term.write(" Target ")
+
+			term.setBackgroundColor(colors.lightGray)
+			term.setCursorPos(w-6,h)
+			term.write(" Go >> ")
+		end
+		draw()
+		while true and pmang.RUNNING do
+			local e = {os.pullEvent()}
+			if e[1] == "mouse_click" and e[2] == 1 then
+				if e[3] == w and e[4] == 1 then
+					pmang.RUNNING = false
+					break
+				elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then -- back button
+					break
+				elseif e[3] >= 3 and e[3] <= 8 and e[4] == 6 then -- copy radio button
+					doCopy = true
+					draw()
+				elseif e[3] >= 11 and e[3] <= 16 and e[4] == 6 then -- move radio button
+					doCopy = false
+					draw()
+				elseif e[3] >= cenx and e[3] <= cenx+7 and e[4] == 11 then -- source button
+					sourcepath = explorerDialog(pointer, true)
+					if sourcepath == "$$removed" then
+						returnvalue = false
+						break
+					end
+					draw()
+				elseif e[3] >= cenx+12 and e[3] <= cenx+19 and e[4] == 11 then -- target button
+					targetpath = explorerDialog(pointer, true)
+					if targetpath == "$$removed" then
+						returnvalue = false
+						break
+					end
+					draw()
+				elseif e[3] >= w-6 and e[3] <= w and e[4] == h and sourcepath ~= "" and targetpath ~= "" then -- go button
+					logmsg("sourcepath: "..sourcepath)
+					logmsg("targetpath: "..targetpath)
+					logmsg("actualpath: "..targetpath..fs.getName(sourcepath))
+					if doCopy then
+						if fs.exists(targetpath..fs.getName(sourcepath)) then
+							clear()
+							term.setTextColor(colors.red)
+							term.setCursorPos(2,3)
+							term.write("Path exists")
+							sleep(2)
+							draw()
+						else
+							fs.copy(sourcepath, targetpath..fs.getName(sourcepath))
+							break
+						end
+					else
+						if fs.exists(targetpath..fs.getName(sourcepath)) then
+							clear()
+							term.setTextColor(colors.red)
+							term.setCursorPos(2,3)
+							term.write("Path exists")
+							sleep(2)
+							draw()
+						else
+							fs.move(sourcepath, targetpath..fs.getName(sourcepath))
+							break
+						end
+					end
+				elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+					displaymenu = "notecenter"
+					drawNotes()
+					displaymenu = "maindrive"
+					draw()
+				end
+			elseif e[1] == "term_resize" then
+				w,h = term.getSize()
+				drawScreen()
+			elseif e[1] == "peripheral" then
+				scanPeripherals(e[2])
+			elseif e[1] == "peripheral_detach" then
+				local success = false
+				local sides = {"top", "bottom", "front", "left", "right", "back"}
+				for i = 1,#peris["network"] do
+					if e[2] == peris["network"][i] then
+						table.remove(peris["network"], i)
+						success = true
+						break
+					end
+				end
+				if not success then
+					for i = 1,6 do
+						if e[2] == sides[i] then
+							peris["sides"][sides[i]] = nil
+							break
+						end
+					end
+				end
+
+				if e[2] == pointer then
+					clear()
+					term.setTextColor(colors.red)
+					term.setCursorPos(1,3)
+					term.write("Peripheral removed!")
+					sleep(3)
+					RUNNING = false
+					break
+				end
+			elseif e[1] == "note_center" then
+				table.insert(notemsgs,e[2])
+				unreadnotes = true
+				drawTopBar()
+			elseif e[1] == "key" and e[2] == keys.q then
+				pmang.RUNNING = false
+				break
+			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+			end
+		end
+		return returnvalue
 	end
 	local function draw()
 		clear()
@@ -341,7 +813,7 @@ local function drivePeripheral(pointer)
 		end
 	end
 	draw()
-	while true do
+	while RUNNING and pmang.RUNNING do
 		local e = {os.pullEvent()}
 		if e[1] == "mouse_click" and e[2] == 1 then
 			if e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
@@ -350,9 +822,10 @@ local function drivePeripheral(pointer)
 				displaymenu = "maindrive"
 				draw()
 			elseif e[3] == w and e[4] == 1 then
-				RUNNING = false
+				pmang.RUNNING = false
 				break
 			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
+				RUNNING = false
 				break
 			elseif e[3] >= 5 and e[3] <= 11 and e[4] == 11 then
 				peripheral.call(pointer, "ejectDisk")
@@ -391,10 +864,19 @@ local function drivePeripheral(pointer)
 				draw()
 			elseif e[3] >= 5 and e[3] <= 21 and e[4] == 15 then
 				clear()
-				term.setCursorPos(2,3)
-				term.write("Coming soon...")
-				sleep(3)
-				draw()
+				displaymenu = "copymove"
+				if drawCopyMove() then
+					displaymenu = "maindrive"
+					draw()
+				else
+					clear()
+					term.setTextColor(colors.red)
+					term.setCursorPos(1,3)
+					term.write("Peripheral removed!")
+					sleep(3)
+					RUNNING = false
+					break
+				end
 			end
 		elseif e[1] == "disk" then
 			draw()
@@ -438,7 +920,7 @@ local function drivePeripheral(pointer)
 			unreadnotes = true
 			drawTopBar()
 		elseif e[1] == "key" and e[2] == keys.q then
-			RUNNING = false
+			pmang.RUNNING = false
 			break
 		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
@@ -490,11 +972,11 @@ local function printerPeripheral(pointer)
 		term.write(" Print from File ")
 	end
 	draw()
-	while true do
+	while true and pmang.RUNNING do
 		local e = {os.pullEvent()}
 		if e[1] == "mouse_click" and e[2] == 1 then
 			if e[3] == w and e[4] == 1 then
-				RUNNING = false
+				pmang.RUNNING = false
 				break
 			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
 				break
@@ -551,7 +1033,7 @@ local function printerPeripheral(pointer)
 			unreadnotes = true
 			drawTopBar()
 		elseif e[1] == "key" and e[2] == keys.q then
-			RUNNING = false
+			pmang.RUNNING = false
 			break
 		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
@@ -606,11 +1088,11 @@ local function monitorPeripheral(pointer)
 		term.write(" Run program ")
 	end
 	draw()
-	while true do
+	while true and pmang.RUNNING do
 		local e = {os.pullEvent()}
 		if e[1] == "mouse_click" and e[2] == 1 then
 			if e[3] == w and e[4] == 1 then
-				RUNNING = false
+				pmang.RUNNING = false
 				break
 			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
 				break
@@ -663,7 +1145,7 @@ local function monitorPeripheral(pointer)
 			unreadnotes = true
 			drawTopBar()
 		elseif e[1] == "key" and e[2] == keys.q then
-			RUNNING = false
+			pmang.RUNNING = false
 			break
 		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
@@ -773,7 +1255,10 @@ local function modemPeripheral(pointer)
 		term.setCursorPos(10,7)
 		term.write("Open Channels: ")
 		term.setCursorPos(10,8)
-		term.write(reverseSort(channels))
+		-- term.write(reverseSort(channels))
+		for i = 1,#channels do
+			term.write(channels[i]..",")
+		end
 
 		term.setBackgroundColor(colors.gray)
 		term.setTextColor(colors.white)
@@ -787,11 +1272,11 @@ local function modemPeripheral(pointer)
 		term.write(" Send ")
 	end
 	draw()
-	while true do
+	while true and pmang.RUNNING do
 		local e = {os.pullEvent()}
 		if e[1] == "mouse_click" and e[2] == 1 then
 			if e[3] == w and e[4] == 1 then
-				RUNNING = false
+				pmang.RUNNING = false
 				break
 			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
 				break
@@ -905,7 +1390,7 @@ local function modemPeripheral(pointer)
 			unreadnotes = true
 			drawTopBar()
 		elseif e[1] == "key" and e[2] == keys.q then
-			RUNNING = false
+			pmang.RUNNING = false
 			break
 		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
@@ -1101,6 +1586,7 @@ local function drawPeripherals()
 		local scrollpos = 1
 		local pospossible = 1
 		local data = {}
+		local RUNNING = true
 		local function clear()
 			term.setBackgroundColor(colors.white)
 			term.clear()
@@ -1154,7 +1640,7 @@ local function drawPeripherals()
 			end
 		end
 		draw()
-		while RUNNING do -- MAINALL handler
+		while RUNNING and pmang.RUNNING do -- MAINALL handler
 			local e = {os.pullEvent()}
 			if e[1] == "term_resize" then
 				w,h = term.getSize()
@@ -1186,7 +1672,7 @@ local function drawPeripherals()
 				unreadnotes = true
 				drawTopBar()
 			elseif e[1] == "key" and e[2] == keys.q then
-				RUNNING = false
+				pmang.RUNNING = false
 				break
 			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 			elseif e[1] == "mouse_scroll" then
@@ -1198,7 +1684,7 @@ local function drawPeripherals()
 				draw()
 			elseif e[1] == "mouse_click" and e[2] == 1 then
 				if e[3] == w and e[4] == 1 then
-					RUNNING = false
+					pmang.RUNNING = false
 					break
 				elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
 					break
@@ -1296,7 +1782,7 @@ function drawNotes()
 	if pospossible then scrollpos = pospossible end
 	draw()
 	unreadnotes = false
-	while true do -- NOTE CENTER LOOP
+	while true and pmang.RUNNING do -- NOTE CENTER LOOP
 		local e = {os.pullEvent()}
 		if e[1] == "term_resize" then
 			w,h = term.getSize()
@@ -1312,7 +1798,7 @@ function drawNotes()
 			scrollpos = pospossible
 			draw()
 		elseif e[1] == "key" and e[2] == keys.q then
-			RUNNING = false
+			pmang.RUNNING = false
 			break
 		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test from inside note center") -- DEV ONLY
 		elseif e[1] == "mouse_click" and e[2] == 1 then
@@ -1320,7 +1806,7 @@ function drawNotes()
 				drawScreen()
 				break
 			elseif e[3] == w and e[4] == 1 then
-				RUNNING = false
+				pmang.RUNNING = false
 				break
 			end
 		elseif e[1] == "mouse_scroll" then
@@ -1337,7 +1823,7 @@ end
 -- Handler
 scanPeripherals()
 local function evtHandler()
-	while RUNNING do
+	while pmang.RUNNING do
 		local e = {os.pullEvent()}
 		if e[1] == "term_resize" then
 			w,h = term.getSize()
