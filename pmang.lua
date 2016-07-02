@@ -1,10 +1,9 @@
 --[[ Peripheral Manager by LegoStax
-	Peripheral functions: line 486
+	Peripheral functions: line 548
 
 	TODO:
 	- fix channel range sorter
 	- add about page for type computer
-	- add print from file
 	- add run program on monitor
 	- add send and receive messages
 	- add actual notifications
@@ -136,6 +135,9 @@ local function logmsg(msg)
 	f.writeLine(msg)
 	f.close()
 end
+local function mod(a,b)
+	return a - math.floor(a/b)*b
+end
 local function scanPeripherals(p)
 	local sides = {"top", "bottom", "front", "left", "right", "back"}
 	if p then
@@ -209,7 +211,7 @@ local function drawTopBar()
 	noteiconxpos = w-5
 	if unreadnotes then term.setBackgroundColor(colors.yellow) end
 	term.write(" ! ")
-	term.setBackgroundColor(colors.lime)
+	term.setBackgroundColor(colors.red)
 	term.setCursorPos(w,1)
 	term.write("X")
 end
@@ -269,7 +271,7 @@ local function explorerDialog(pointer, canDir)
 		noteiconxpos = w-5
 		if unreadnotes then term.setBackgroundColor(colors.yellow) end
 		term.write(" ! ")
-		term.setBackgroundColor(colors.lime)
+		term.setBackgroundColor(colors.red)
 		term.setCursorPos(w,1)
 		term.write("X")
 	end
@@ -430,9 +432,17 @@ local function explorerDialog(pointer, canDir)
 				displaymenu = "explorerdialog"
 				drawScreen()
 			elseif e[3] >= w-8 and e[3] <= w and e[4] == h and selectedPath ~= "" then -- select button
-				returnpath = selectedPath
-				RUNNING = false
-				break
+				if selectedPath == "/" then
+					if canDir then
+						returnpath = selectedPath
+						RUNNING = false
+						break
+					end
+				else
+					returnpath = selectedPath
+					RUNNING = false
+					break
+				end
 			elseif e[4] >= 3 then
 				pos = (e[4]-3)+scrollpos
 				if pos <= #oldItems then
@@ -932,6 +942,7 @@ end
 
 local function printerPeripheral(pointer)
 	displaymenu = "mainprinter"
+	local pagew, pageh = 25,21
 
 	local function clear()
 		term.setBackgroundColor(colors.white)
@@ -939,6 +950,211 @@ local function printerPeripheral(pointer)
 		drawTopBar()
 		term.setBackgroundColor(colors.white)
 		term.setTextColor(colors.black)
+	end
+	local function printFromFile()
+
+		local msg = true
+		local returnvalue = true
+		local sourcepath = ""
+		local canPrint = false
+		local cenx = 0
+		local printLines = {}
+
+		local function readFile(path)
+			local flines = {}
+			for line in io.lines(path) do
+				table.insert(flines, line)
+			end
+			return flines
+		end
+
+		local function calculatePrintJob()
+			printLines = {}
+			local flines = readFile(sourcepath)
+			local plevel = peripheral.call(pointer, "getPaperLevel")
+			local ilevel = peripheral.call(pointer, "getInkLevel")
+
+			for line = 1,#flines do
+				if flines[line]:len() > pagew then
+					table.insert(printLines, string.sub(flines[line],1,pagew))
+					for i = pagew+1,flines[line]:len(),pagew do
+						table.insert(printLines, string.sub(flines[line],i,i+pagew))
+					end
+				else
+					table.insert(printLines, flines[line])
+				end
+			end
+			msg = true
+			if #printLines > plevel*pageh then
+				local excesslines = #printLines - (plevel*pageh)
+				msg = math.ceil(excesslines/pageh).." extra pages required"
+			elseif #printLines > ilevel*pageh then
+				local excesslines = #printLines - (ilevel*pageh)
+				msg = math.ceil(excesslines/pageh).." extra ink required"
+			end
+			return msg
+		end
+
+		local function printFile()
+			clear()
+			term.setTextColor(colors.black)
+			term.setBackgroundColor(colors.white)
+			term.setCursorPos(2,3)
+			term.write("Printing...")
+
+			peripheral.call(pointer, "newPage")
+			peripheral.call(pointer, "setPageTitle", fs.getName(sourcepath).." #1")
+			local currentline = 1
+			local currentpage = 1
+			for i = 1,#printLines do
+				peripheral.call(pointer, "setCursorPos", 1, currentline)
+				peripheral.call(pointer, "write", printLines[i])
+				currentline = currentline+1
+				if currentline > pageh and i < #printLines then
+					currentline = 1
+					if not peripheral.call(pointer, "endPage") then
+						clear()
+						term.setTextColor(colors.red)
+						term.setBackgroundColor(colors.white)
+						term.setCursorPos(2,3)
+						print("Please remove printed pages to continue")
+						while not peripheral.call(pointer, "endPage") do
+							sleep(1)
+						end
+						clear()
+						term.setTextColor(colors.black)
+						term.setBackgroundColor(colors.white)
+						term.setCursorPos(2,3)
+						term.write("Printing...")
+					end
+					peripheral.call(pointer, "newPage")
+					currentpage = currentpage+1
+					peripheral.call(pointer, "setPageTitle", fs.getName(sourcepath).." #"..currentpage)
+				end
+			end
+			peripheral.call(pointer, "endPage")
+		end
+
+		local function draw()
+			clear()
+			term.setBackgroundColor(colors.lightGray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(1,2)
+			term.write(" << Back ")
+
+			term.setBackgroundColor(colors.white)
+			term.setTextColor(colors.black)
+			term.setCursorPos((w-15)/2,4)
+			term.write("Print from File")
+
+			cenx = (w-19)/2
+
+			term.setCursorPos(cenx,6)
+			term.write("Source: "..sourcepath)
+
+			term.setCursorPos(cenx,8)
+			if msg == true then
+				term.write("Status: OK")
+			else
+				term.write("Status: "..msg)
+			end
+
+			term.setBackgroundColor(colors.gray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(cenx,10)
+			term.write(" Refresh ")
+
+			term.setCursorPos(cenx,12)
+			term.write(" Browse ")
+
+			if canPrint then
+				term.setBackgroundColor(colors.lime)
+			else
+				term.setBackgroundColor(colors.red)
+			end
+			term.setCursorPos(cenx+12,12)
+			term.write(" Print ")
+		end
+		draw()
+		while true do
+			local e = {os.pullEvent()}
+			if e[1] == "mouse_click" and e[2] == 1 then
+				if e[3] == w and e[4] == 1 then
+					pmang.RUNNING = false
+					break
+				elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
+					break
+				elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+					displaymenu = "notecenter"
+					drawNotes()
+					displaymenu = "printfromfile"
+					draw()
+				elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then -- back button
+					break
+				elseif e[3] >= cenx and e[3] <= cenx+8 and e[4] == 10 then -- refresh button
+					msg = calculatePrintJob()
+					if msg == true then
+						canPrint = true
+					else
+						canPrint = false
+					end
+					draw()
+				elseif e[3] >= cenx and e[3] <= cenx+7 and e[4] == 12 then -- browse button
+					sourcepath = explorerDialog(pointer)
+					if sourcepath == "$$removed" then
+						returnvalue = false
+						break
+					end
+					msg = calculatePrintJob()
+					if msg == true then
+						canPrint = true
+					else
+						canPrint = false
+					end
+					draw()
+				elseif e[3] >= cenx+12 and e[3] <= cenx+18 and e[4] == 12 and canPrint then -- print button
+					printFile()
+					break
+				end
+			elseif e[1] == "term_resize" then
+				w,h = term.getSize()
+				drawScreen()
+			elseif e[1] == "peripheral" then
+				scanPeripherals(e[2])
+			elseif e[1] == "peripheral_detach" then
+				local success = false
+				local sides = {"top", "bottom", "front", "left", "right", "back"}
+				for i = 1,#peris["network"] do
+					if e[2] == peris["network"][i] then
+						table.remove(peris["network"], i)
+						success = true
+						break
+					end
+				end
+				if not success then
+					for i = 1,6 do
+						if e[2] == sides[i] then
+							peris["sides"][sides[i]] = nil
+							break
+						end
+					end
+				end
+
+				if e[2] == pointer then
+					returnvalue = false
+					break
+				end
+			elseif e[1] == "note_center" then
+				table.insert(notemsgs,e[2])
+				unreadnotes = true
+				drawTopBar()
+			elseif e[1] == "key" and e[2] == keys.q then
+				pmang.RUNNING = false
+				break
+			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+			end
+		end
+		return returnvalue
 	end
 	local function draw()
 		clear()
@@ -987,11 +1203,18 @@ local function printerPeripheral(pointer)
 				draw()
 			elseif e[3] >= 5 and e[3] <= 21 and e[4] == 11 then
 				if peripheral.call(pointer, "getInkLevel") > 0 and peripheral.call(pointer, "getPaperLevel") > 0 then
-					clear()
-					term.setCursorPos(2,3)
-					term.write("Coming soon...")
-					sleep(3)
-					draw()
+					displaymenu = "printfromfile"
+					if printFromFile() then
+						displaymenu = "mainprinter"
+						draw()
+					else
+						clear()
+						term.setTextColor(colors.red)
+						term.setCursorPos(1,3)
+						term.write("Peripheral removed!")
+						sleep(3)
+						break
+					end
 				else
 					draw()
 				end
