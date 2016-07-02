@@ -1,11 +1,9 @@
 --[[ Peripheral Manager by LegoStax
-	Peripheral functions: line 546
+	Peripheral functions: line 575
 
 	TODO:
 	- fix channel range sorter
 	- add about page for type computer
-	- add receive messages
-	- add actual notifications
 ]]--
 
 if not term.isColor() or not term.isColour() then
@@ -46,6 +44,7 @@ local boxes = {
 	["right"] = {x = 0, y = 0},
 	["back"] = {x = 0, y = 0},
 }
+local mchannels = {}
 
 -- DRAWING
 -- 0 = black
@@ -209,6 +208,7 @@ local function drawTopBar()
 	term.setCursorPos(w-5,1)
 	noteiconxpos = w-5
 	if unreadnotes then term.setBackgroundColor(colors.yellow) end
+	if displaymenu == "notecenter" then term.setBackgroundColor(colors.lightGray) end
 	term.write(" ! ")
 	term.setBackgroundColor(colors.red)
 	term.setCursorPos(w,1)
@@ -233,6 +233,30 @@ local function drawPeri(t,xpos,ypos)
 			term.write(string.sub(ptxt[t][y], x, x))
 		end
 	end
+end
+local function createNote(pointer, msg)
+	msg = textutils.formatTime(os.time(),true)..":"..pointer..": "..msg
+	if msg:len() > w then
+		table.insert(notemsgs, string.sub(msg, 1, w))
+		for i = w+1,msg:len(),w do
+			table.insert(notemsgs, string.sub(msg, i, i+w))
+		end
+	else
+		table.insert(notemsgs, msg)
+	end
+	if displaymenu ~= "notecenter" then
+		unreadnotes = true
+	end
+	os.queueEvent("note_center")
+end
+local function processMessage(pointer, channel, reply, msg, dist)
+	local note = "C"..channel.."/"..reply.." D:"..dist..": "
+	if type(msg) == "table" and msg.message ~= nil then
+		note = note..msg.message
+	else
+		note = note..msg
+	end
+	createNote(pointer, note)
 end
 
 local function explorerDialog(pointer, canDir)
@@ -492,7 +516,9 @@ local function explorerDialog(pointer, canDir)
 			drawScreen()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
+			createNote(e[2], "Attached")
 		elseif e[1] == "peripheral_detach" then
+			createNote(e[2], "Detached")
 			local success = false
 			local sides = {"top", "bottom", "front", "left", "right", "back"}
 			for i = 1,#peris["network"] do
@@ -521,13 +547,21 @@ local function explorerDialog(pointer, canDir)
 				break
 			end
 		elseif e[1] == "note_center" then
-			table.insert(notemsgs,e[2])
-			unreadnotes = true
 			drawTopBar()
+		elseif e[1] == "disk" then
+			createNote(e[2], "Disk inserted")
+		elseif e[1] == "disk_eject" then
+			createNote(e[2], "Disk ejected")
+		elseif e[1] == "monitor_resize" then
+			local mw,mh = peripheral.call(e[2], "getSize")
+			createNote(e[2], "Screen size changed to "..mw.."x"..mh)
+		elseif e[1] == "monitor_touch" then
+			createNote(e[2], "touched at "..e[3]..", "..e[4])
+		elseif e[1] == "modem_message" then
+			processMessage(e[2], e[3], e[4], e[5], e[6])
 		elseif e[1] == "key" and e[2] == keys.q then
 			pmang.RUNNING = false
 			break
-		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
 	end
 
@@ -713,7 +747,9 @@ local function drivePeripheral(pointer)
 				draw()
 			elseif e[1] == "peripheral" then
 				scanPeripherals(e[2])
+				createNote(e[2], "Attached")
 			elseif e[1] == "peripheral_detach" then
+				createNote(e[2], "Detached")
 				local success = false
 				local sides = {"top", "bottom", "front", "left", "right", "back"}
 				for i = 1,#peris["network"] do
@@ -742,13 +778,21 @@ local function drivePeripheral(pointer)
 					break
 				end
 			elseif e[1] == "note_center" then
-				table.insert(notemsgs,e[2])
-				unreadnotes = true
 				drawTopBar()
+			elseif e[1] == "disk" then
+				createNote(e[2], "Disk inserted")
+			elseif e[1] == "disk_eject" then
+				createNote(e[2], "Disk ejected")
+			elseif e[1] == "monitor_resize" then
+				local mw,mh = peripheral.call(e[2], "getSize")
+				createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+			elseif e[1] == "monitor_touch" then
+				createNote(e[2], "touched at "..e[3]..", "..e[4])
+			elseif e[1] == "modem_message" then
+				processMessage(e[2], e[3], e[4], e[5], e[6])
 			elseif e[1] == "key" and e[2] == keys.q then
 				pmang.RUNNING = false
 				break
-			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 			end
 		end
 		return returnvalue
@@ -896,7 +940,9 @@ local function drivePeripheral(pointer)
 			draw()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
+			createNote(e[2], "Attached")
 		elseif e[1] == "peripheral_detach" then
+			createNote(e[2], "Detached")
 			local success = false
 			local sides = {"top", "bottom", "front", "left", "right", "back"}
 			for i = 1,#peris["network"] do
@@ -924,13 +970,21 @@ local function drivePeripheral(pointer)
 				break
 			end
 		elseif e[1] == "note_center" then
-			table.insert(notemsgs,e[2])
-			unreadnotes = true
 			drawTopBar()
+		elseif e[1] == "disk" then
+			createNote(e[2], "Disk inserted")
+		elseif e[1] == "disk_eject" then
+			createNote(e[2], "Disk ejected")
+		elseif e[1] == "monitor_resize" then
+			local mw,mh = peripheral.call(e[2], "getSize")
+			createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+		elseif e[1] == "monitor_touch" then
+			createNote(e[2], "touched at "..e[3]..", "..e[4])
+		elseif e[1] == "modem_message" then
+			processMessage(e[2], e[3], e[4], e[5], e[6])
 		elseif e[1] == "key" and e[2] == keys.q then
 			pmang.RUNNING = false
 			break
-		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
 	end
 end
@@ -1120,7 +1174,9 @@ local function printerPeripheral(pointer)
 				draw()
 			elseif e[1] == "peripheral" then
 				scanPeripherals(e[2])
+				createNote(e[2], "Attached")
 			elseif e[1] == "peripheral_detach" then
+				createNote(e[2], "Detached")
 				local success = false
 				local sides = {"top", "bottom", "front", "left", "right", "back"}
 				for i = 1,#peris["network"] do
@@ -1144,13 +1200,21 @@ local function printerPeripheral(pointer)
 					break
 				end
 			elseif e[1] == "note_center" then
-				table.insert(notemsgs,e[2])
-				unreadnotes = true
 				drawTopBar()
+			elseif e[1] == "disk" then
+				createNote(e[2], "Disk inserted")
+			elseif e[1] == "disk_eject" then
+				createNote(e[2], "Disk ejected")
+			elseif e[1] == "monitor_resize" then
+				local mw,mh = peripheral.call(e[2], "getSize")
+				createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+			elseif e[1] == "monitor_touch" then
+				createNote(e[2], "touched at "..e[3]..", "..e[4])
+			elseif e[1] == "modem_message" then
+				processMessage(e[2], e[3], e[4], e[5], e[6])
 			elseif e[1] == "key" and e[2] == keys.q then
 				pmang.RUNNING = false
 				break
-			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 			end
 		end
 		return returnvalue
@@ -1224,7 +1288,9 @@ local function printerPeripheral(pointer)
 			draw()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
+			createNote(e[2], "Attached")
 		elseif e[1] == "peripheral_detach" then
+			createNote(e[2], "Detached")
 			local success = false
 			local sides = {"top", "bottom", "front", "left", "right", "back"}
 			for i = 1,#peris["network"] do
@@ -1252,13 +1318,21 @@ local function printerPeripheral(pointer)
 				break
 			end
 		elseif e[1] == "note_center" then
-			table.insert(notemsgs,e[2])
-			unreadnotes = true
 			drawTopBar()
+		elseif e[1] == "disk" then
+			createNote(e[2], "Disk inserted")
+		elseif e[1] == "disk_eject" then
+			createNote(e[2], "Disk ejected")
+		elseif e[1] == "monitor_resize" then
+			local mw,mh = peripheral.call(e[2], "getSize")
+			createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+		elseif e[1] == "monitor_touch" then
+			createNote(e[2], "touched at "..e[3]..", "..e[4])
+		elseif e[1] == "modem_message" then
+			processMessage(e[2], e[3], e[4], e[5], e[6])
 		elseif e[1] == "key" and e[2] == keys.q then
 			pmang.RUNNING = false
 			break
-		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
 	end
 end
@@ -1361,7 +1435,9 @@ local function monitorPeripheral(pointer)
 				draw()
 			elseif e[1] == "peripheral" then
 				scanPeripherals(e[2])
+				createNote(e[2], "Attached")
 			elseif e[1] == "peripheral_detach" then
+				createNote(e[2], "Detached")
 				local success = false
 				local sides = {"top", "bottom", "front", "left", "right", "back"}
 				for i = 1,#peris["network"] do
@@ -1385,13 +1461,21 @@ local function monitorPeripheral(pointer)
 					break
 				end
 			elseif e[1] == "note_center" then
-				table.insert(notemsgs,e[2])
-				unreadnotes = true
 				drawTopBar()
+			elseif e[1] == "disk" then
+				createNote(e[2], "Disk inserted")
+			elseif e[1] == "disk_eject" then
+				createNote(e[2], "Disk ejected")
+			elseif e[1] == "monitor_resize" then
+				local mw,mh = peripheral.call(e[2], "getSize")
+				createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+			elseif e[1] == "monitor_touch" then
+				createNote(e[2], "touched at "..e[3]..", "..e[4])
+			elseif e[1] == "modem_message" then
+				processMessage(e[2], e[3], e[4], e[5], e[6])
 			elseif e[1] == "key" and e[2] == keys.q then
 				pmang.RUNNING = false
 				break
-			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 			end
 		end
 		return returnvalue
@@ -1454,7 +1538,9 @@ local function monitorPeripheral(pointer)
 			draw()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
+			createNote(e[2], "Attached")
 		elseif e[1] == "peripheral_detach" then
+			createNote(e[2], "Detached")
 			local success = false
 			local sides = {"top", "bottom", "front", "left", "right", "back"}
 			for i = 1,#peris["network"] do
@@ -1482,13 +1568,21 @@ local function monitorPeripheral(pointer)
 				break
 			end
 		elseif e[1] == "note_center" then
-			table.insert(notemsgs,e[2])
-			unreadnotes = true
 			drawTopBar()
+		elseif e[1] == "disk" then
+			createNote(e[2], "Disk inserted")
+		elseif e[1] == "disk_eject" then
+			createNote(e[2], "Disk ejected")
+		elseif e[1] == "monitor_resize" then
+			local mw,mh = peripheral.call(e[2], "getSize")
+			createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+		elseif e[1] == "monitor_touch" then
+			createNote(e[2], "touched at "..e[3]..", "..e[4])
+		elseif e[1] == "modem_message" then
+			processMessage(e[2], e[3], e[4], e[5], e[6])
 		elseif e[1] == "key" and e[2] == keys.q then
 			pmang.RUNNING = false
 			break
-		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
 	end
 end
@@ -1500,14 +1594,20 @@ end
 local function modemPeripheral(pointer)
 	displaymenu = "mainmodem"
 
-	local channels = {}
-
 	if peripheral.call(pointer, "isWireless") then
 		dispname = "Wireless Modem"
 		peritype = "wmodem"
 	else
 		dispname = "Wired Modem"
 		peritype = "modem"
+	end
+
+	mchannels[pointer] = {}
+
+	for i = 0,65535 do
+		if peripheral.call(pointer, "isOpen", i) then
+			table.insert(mchannels[pointer], i)
+		end
 	end
 
 	local function sortNumbers(input)
@@ -1563,9 +1663,9 @@ local function modemPeripheral(pointer)
 
 	local function removeChannel(chan)
 		peripheral.call(pointer, "close", tonumber(chan))
-		for i = 1,#channels do
-			if tonumber(chan) == channels[i] then
-				table.remove(channels, i)
+		for i = 1,#mchannels[pointer] do
+			if tonumber(chan) == mchannels[pointer][i] then
+				table.remove(mchannels[pointer], i)
 				break
 			end
 		end
@@ -1581,8 +1681,8 @@ local function modemPeripheral(pointer)
 	local function sendMessages()
 		local returnvalue = true
 		local cenx = 0
-		local chan = channels[1] or 1
-		local repchan = channels[1] or 1
+		local chan = mchannels[pointer][1] or 1
+		local repchan = mchannels[pointer][1] or 1
 		local message = ""
 
 		local function draw()
@@ -1702,7 +1802,9 @@ local function modemPeripheral(pointer)
 				draw()
 			elseif e[1] == "peripheral" then
 				scanPeripherals(e[2])
+				createNote(e[2], "Attached")
 			elseif e[1] == "peripheral_detach" then
+				createNote(e[2], "Detached")
 				local success = false
 				local sides = {"top", "bottom", "front", "left", "right", "back"}
 				for i = 1,#peris["network"] do
@@ -1726,13 +1828,21 @@ local function modemPeripheral(pointer)
 					break
 				end
 			elseif e[1] == "note_center" then
-				table.insert(notemsgs,e[2])
-				unreadnotes = true
 				drawTopBar()
+			elseif e[1] == "disk" then
+				createNote(e[2], "Disk inserted")
+			elseif e[1] == "disk_eject" then
+				createNote(e[2], "Disk ejected")
+			elseif e[1] == "monitor_resize" then
+				local mw,mh = peripheral.call(e[2], "getSize")
+				createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+			elseif e[1] == "monitor_touch" then
+				createNote(e[2], "touched at "..e[3]..", "..e[4])
+			elseif e[1] == "modem_message" then
+				processMessage(e[2], e[3], e[4], e[5], e[6])
 			elseif e[1] == "key" and e[2] == keys.q then
 				pmang.RUNNING = false
 				break
-			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 			end
 		end
 
@@ -1757,8 +1867,8 @@ local function modemPeripheral(pointer)
 		term.write("Open Channels: ")
 		term.setCursorPos(10,8)
 		-- term.write(reverseSort(channels))
-		for i = 1,#channels do
-			term.write(channels[i]..",")
+		for i = 1,#mchannels[pointer] do
+			term.write(mchannels[pointer][i]..",")
 		end
 
 		term.setBackgroundColor(colors.gray)
@@ -1813,7 +1923,7 @@ local function modemPeripheral(pointer)
 					else]]--
 						if tonumber(input) then
 							peripheral.call(pointer, "open", tonumber(input))
-							table.insert(channels, tonumber(input))
+							table.insert(mchannels[pointer], tonumber(input))
 						end
 					--end
 				end
@@ -1847,7 +1957,7 @@ local function modemPeripheral(pointer)
 				draw()
 			elseif e[3] >= 5 and e[3] <= 15 and e[4] == 15 then -- close all
 				peripheral.call(pointer, "closeAll")
-				channels = {}
+				mchannels[pointer] = {}
 				draw()
 			elseif e[3] >= 5 and e[3] <= 11 and e[4] == 17 then -- send
 				displaymenu = "modemsend"
@@ -1856,6 +1966,7 @@ local function modemPeripheral(pointer)
 					term.setTextColor(colors.red)
 					term.setCursorPos(1,3)
 					term.write("Peripheral removed!")
+					mchannels[pointer] = {}
 					sleep(3)
 					break
 				else
@@ -1869,7 +1980,9 @@ local function modemPeripheral(pointer)
 			draw()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
+			createNote(e[2], "Attached")
 		elseif e[1] == "peripheral_detach" then
+			createNote(e[2], "Detached")
 			local success = false
 			local sides = {"top", "bottom", "front", "left", "right", "back"}
 			for i = 1,#peris["network"] do
@@ -1893,17 +2006,26 @@ local function modemPeripheral(pointer)
 				term.setTextColor(colors.red)
 				term.setCursorPos(1,3)
 				term.write("Peripheral removed!")
+				mchannels[pointer] = {}
 				sleep(3)
 				break
 			end
 		elseif e[1] == "note_center" then
-			table.insert(notemsgs,e[2])
-			unreadnotes = true
 			drawTopBar()
+		elseif e[1] == "disk" then
+			createNote(e[2], "Disk inserted")
+		elseif e[1] == "disk_eject" then
+			createNote(e[2], "Disk ejected")
+		elseif e[1] == "monitor_resize" then
+			local mw,mh = peripheral.call(e[2], "getSize")
+			createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+		elseif e[1] == "monitor_touch" then
+			createNote(e[2], "touched at "..e[3]..", "..e[4])
+		elseif e[1] == "modem_message" then
+			processMessage(e[2], e[3], e[4], e[5], e[6])
 		elseif e[1] == "key" and e[2] == keys.q then
 			pmang.RUNNING = false
 			break
-		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
 	end
 end
@@ -2158,8 +2280,10 @@ local function drawPeripherals()
 				drawScreen()
 			elseif e[1] == "peripheral" then
 				scanPeripherals(e[2])
+				createNote(e[2], "Attached")
 				draw()
 			elseif e[1] == "peripheral_detach" then
+				createNote(e[2], "Detached")
 				local success = false
 				local sides = {"top", "bottom", "front", "left", "right", "back"}
 				for i = 1,#peris["network"] do
@@ -2179,13 +2303,21 @@ local function drawPeripherals()
 				end
 				draw()
 			elseif e[1] == "note_center" then
-				table.insert(notemsgs,e[2])
-				unreadnotes = true
 				drawTopBar()
+			elseif e[1] == "disk" then
+				createNote(e[2], "Disk inserted")
+			elseif e[1] == "disk_eject" then
+				createNote(e[2], "Disk ejected")
+			elseif e[1] == "monitor_resize" then
+				local mw,mh = peripheral.call(e[2], "getSize")
+				createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+			elseif e[1] == "monitor_touch" then
+				createNote(e[2], "touched at "..e[3]..", "..e[4])
+			elseif e[1] == "modem_message" then
+				processMessage(e[2], e[3], e[4], e[5], e[6])
 			elseif e[1] == "key" and e[2] == keys.q then
 				pmang.RUNNING = false
 				break
-			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 			elseif e[1] == "mouse_scroll" then
 				if e[2] == 1 and scrollpos < pospossible then
 					scrollpos = scrollpos+1
@@ -2276,6 +2408,8 @@ function drawNotes()
 
 		-- draw
 		term.setCursorPos(1,4)
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
 		for i = scrollpos,#notemsgs do
 			if i > #notemsgs then break end
 			term.write(notemsgs[i])
@@ -2300,18 +2434,47 @@ function drawNotes()
 			drawScreen()
 		elseif e[1] == "peripheral" then
 			scanPeripherals(e[2])
+			createNote(e[2], "Attached")
 		elseif e[1] == "peripheral_detach" then
-			peris[e[2]] = nil
+			createNote(e[2], "Detached")
+			local success = false
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			for i = 1,#peris["network"] do
+				if e[2] == peris["network"][i] then
+					table.remove(peris["network"], i)
+					success = true
+					break
+				end
+			end
+			if not success then
+				for i = 1,6 do
+					if e[2] == sides[i] then
+						peris["sides"][sides[i]] = nil
+						break
+					end
+				end
+			end
+			draw()
 		elseif e[1] == "note_center" then
-			table.insert(notemsgs,e[2])
+			drawTopBar()
 			pospossible = #notemsgs-(h-4)
 			if pospossible < 1 then pospossible = 1 end
 			scrollpos = pospossible
 			draw()
+		elseif e[1] == "disk" then
+			createNote(e[2], "Disk inserted")
+		elseif e[1] == "disk_eject" then
+			createNote(e[2], "Disk ejected")
+		elseif e[1] == "monitor_resize" then
+			local mw,mh = peripheral.call(e[2], "getSize")
+			createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+		elseif e[1] == "monitor_touch" then
+			createNote(e[2], "touched at "..e[3]..", "..e[4])
+		elseif e[1] == "modem_message" then
+			processMessage(e[2], e[3], e[4], e[5], e[6])
 		elseif e[1] == "key" and e[2] == keys.q then
 			pmang.RUNNING = false
 			break
-		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test from inside note center") -- DEV ONLY
 		elseif e[1] == "mouse_click" and e[2] == 1 then
 			if e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then
 				drawScreen()
@@ -2340,9 +2503,11 @@ local function evtHandler()
 			w,h = term.getSize()
 			drawScreen()
 		elseif e[1] == "peripheral" then
+			createNote(e[2], "Attached")
 			scanPeripherals(e[2])
 			drawScreen()
 		elseif e[1] == "peripheral_detach" then
+			createNote(e[2], "Detached")
 			local success = false
 			local sides = {"top", "bottom", "front", "left", "right", "back"}
 			for i = 1,#peris["network"] do
@@ -2363,9 +2528,18 @@ local function evtHandler()
 
 			drawScreen()
 		elseif e[1] == "note_center" then
-			table.insert(notemsgs,e[2])
-			unreadnotes = true
 			drawTopBar()
+		elseif e[1] == "disk" then
+			createNote(e[2], "Disk inserted")
+		elseif e[1] == "disk_eject" then
+			createNote(e[2], "Disk ejected")
+		elseif e[1] == "monitor_resize" then
+			local mw,mh = peripheral.call(e[2], "getSize")
+			createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+		elseif e[1] == "monitor_touch" then
+			createNote(e[2], "touched at "..e[3]..", "..e[4])
+		elseif e[1] == "modem_message" then
+			processMessage(e[2], e[3], e[4], e[5], e[6])
 		elseif e[1] == "mouse_click" and e[2] == 1 then
 			if e[3] == w and e[4] == 1 then break
 			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 and networkperis and displaymenu == "main" then
@@ -2399,7 +2573,6 @@ local function evtHandler()
 				end
 			end
 		elseif e[1] == "key" and e[2] == keys.q then break
-		elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
 		end
 	end
 end
