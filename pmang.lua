@@ -1,9 +1,8 @@
 --[[ Peripheral Manager by LegoStax
-	Peripheral functions: line 575
+	Peripheral functions: line 597
 
 	TODO:
 	- fix channel range sorter
-	- add about page for type computer
 ]]--
 
 if not term.isColor() or not term.isColour() then
@@ -88,6 +87,12 @@ local pcolor = {
 		"11111",
 		"11111",
 	},
+	["computer"] = {
+		"11111",
+		"10001",
+		"20002",
+		"22222",
+	},
 }
 local ptxt = {
 	["drive"] = {
@@ -125,6 +130,12 @@ local ptxt = {
 		"((@))",
 		"((@))",
 		"     ",
+	},
+	["computer"] = {
+		"     ",
+		" >   ",
+		"     ",
+		"    -",
 	},
 }
 -- Utils
@@ -230,7 +241,13 @@ local function drawPeri(t,xpos,ypos)
 				term.setBackgroundColor(colors.yellow)
 			end
 			term.setCursorPos(x+(xpos-1), y+ypos)
-			term.write(string.sub(ptxt[t][y], x, x))
+			if string.sub(ptxt[t][y],x,x) == ">" then
+				term.setTextColor(colors.white)
+				term.write(string.sub(ptxt[t][y], x, x))
+				term.setTextColor(colors.black)
+			else
+				term.write(string.sub(ptxt[t][y], x, x))
+			end
 		end
 	end
 end
@@ -2034,7 +2051,148 @@ end
 
 
 
+local function computerPeripheral(pointer)
+	displaymenu = "maincomputer"
+	local status = peripheral.call(pointer, "isOn")
+	local function clear()
+		term.setBackgroundColor(colors.white)
+		term.clear()
+		drawTopBar()
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+	end
+	local function draw()
+		clear()
+		term.setBackgroundColor(colors.lightGray)
+		term.setTextColor(colors.white)
+		term.setCursorPos(1,2)
+		term.write(" << Back ")
 
+		term.setBackgroundColor(colors.white)
+		term.setTextColor(colors.black)
+		term.setCursorPos(3,4)
+		term.write("Computer")
+		drawPeri("computer",3,5)
+
+		term.setBackgroundColor(colors.white)
+		term.setCursorPos(10,6)
+		term.write("Name: "..pointer)
+		term.setCursorPos(10,7)
+		term.write("ID: "..peripheral.call(pointer, "getID"))
+
+		term.setCursorPos(10,8)
+		term.write("Status: ")
+		status = peripheral.call(pointer, "isOn")
+		if status then
+			term.setTextColor(colors.lime)
+			term.write("Online")
+		else
+			term.setTextColor(colors.lightGray)
+			term.write("Offline")
+		end
+
+		term.setBackgroundColor(colors.gray)
+		term.setTextColor(colors.white)
+		term.setCursorPos(5,11)
+		term.write(" Refresh ")
+		term.setCursorPos(5,13)
+		if status then
+			term.write(" Shutdown ")
+			term.setCursorPos(5,15)
+			term.write(" Reboot ")
+		else
+			term.write(" Turn On ")
+		end
+	end
+	draw()
+	while true do
+		local e = {os.pullEvent()}
+		if e[1] == "mouse_click" and e[2] == 1 then
+			if e[3] == w and e[4] == 1 then
+				pmang.RUNNING = false
+				break
+			elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then -- back button
+				break
+			elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+				displaymenu = "notecenter"
+				drawNotes()
+				displaymenu = "mainmonitor"
+				draw()
+			elseif e[3] >= 5 and e[3] <= 13 and e[4] == 11 then -- refresh button
+				status = peripheral.call(pointer, "isOn")
+				draw()
+			else
+				if status then
+					if e[3] >= 5 and e[3] <= 14 and e[4] == 13 then -- shutdown button
+						peripheral.call(pointer, "shutdown")
+						-- status = false
+						draw()
+					elseif e[3] >= 5 and e[3] <= 12 and e[4] == 15 then -- reboot button
+						peripheral.call(pointer, "reboot")
+					end
+				else
+					if e[3] >= 5 and e[3] <= 13 and e[4] == 13 then -- turn on button
+						peripheral.call(pointer, "turnOn")
+						sleep(0.1)
+						-- status = true
+						draw()
+					end
+				end
+			end
+		elseif e[1] == "term_resize" then
+			w,h = term.getSize()
+			drawTopBar()
+			draw()
+		elseif e[1] == "peripheral" then
+			scanPeripherals(e[2])
+			createNote(e[2], "Attached")
+		elseif e[1] == "peripheral_detach" then
+			createNote(e[2], "Detached")
+			local success = false
+			local sides = {"top", "bottom", "front", "left", "right", "back"}
+			for i = 1,#peris["network"] do
+				if e[2] == peris["network"][i] then
+					table.remove(peris["network"], i)
+					success = true
+					break
+				end
+			end
+			if not success then
+				for i = 1,6 do
+					if e[2] == sides[i] then
+						peris["sides"][sides[i]] = nil
+						break
+					end
+				end
+			end
+
+			if e[2] == pointer then
+				clear()
+				term.setTextColor(colors.red)
+				term.setCursorPos(1,3)
+				term.write("Peripheral removed!")
+				sleep(3)
+				break
+			end
+		elseif e[1] == "note_center" then
+			drawTopBar()
+		elseif e[1] == "disk" then
+			createNote(e[2], "Disk inserted")
+		elseif e[1] == "disk_eject" then
+			createNote(e[2], "Disk ejected")
+		elseif e[1] == "monitor_resize" then
+			local mw,mh = peripheral.call(e[2], "getSize")
+			createNote(e[2], "Monitor size changed to "..mw.."x"..mh)
+		elseif e[1] == "monitor_touch" then
+			createNote(e[2], "touched at "..e[3]..", "..e[4])
+		elseif e[1] == "modem_message" then
+			processMessage(e[2], e[3], e[4], e[5], e[6])
+		elseif e[1] == "key" and e[2] == keys.q then
+			pmang.RUNNING = false
+			break
+		end
+	end
+end
 
 
 
@@ -2067,8 +2225,9 @@ local function redirectToType(pointer, isSide)
 			monitorPeripheral(pointer)
 		elseif ref == "modem" or ref == "wmodem" then
 			modemPeripheral(pointer)
+		elseif ref == "computer" then
+			computerPeripheral(pointer)
 		end
-		displaymenu = "main"
 	else
 		local undscrpos = string.find(pointer, "_")
 		local ref = string.sub(pointer, 1, undscrpos-1)
@@ -2080,6 +2239,8 @@ local function redirectToType(pointer, isSide)
 			monitorPeripheral(pointer)
 		elseif ref == "modem" then
 			modemPeripheral(pointer)
+		elseif ref == "computer" then
+			computerPeripheral(pointer)
 		end
 	end
 end
@@ -2179,6 +2340,7 @@ local function drawPeripherals()
 					elseif ref == "amonitor" then dispname = "Adv Monitor"
 					elseif ref == "modem" then dispname = "Wired Modem"
 					elseif ref == "wmodem" then dispname = "Wireless Modem"
+					elseif ref == "computer" then dispname = "Computer"
 					end
 					local cenx = (11-dispname:len())/2
 					term.setCursorPos(cenx+boxes[sides[i]].x, boxes[sides[i]].y+7)
@@ -2554,21 +2716,27 @@ local function evtHandler()
 			elseif displaymenu == "main" and displaymode == "full" then -- click detection for full boxes
 				if e[3] >= boxes.top.x and e[3] <= boxes.top.x+10 and e[4] >= boxes.top.y and e[4] <= boxes.top.y+6 then -- TOP
 					redirectToType("top", true)
+					displaymenu = "main"
 					drawScreen()
 				elseif e[3] >= boxes.bottom.x and e[3] <= boxes.bottom.x+10 and e[4] >= boxes.bottom.y and e[4] <= boxes.bottom.y+6 then -- BOTTOM
 					redirectToType("bottom", true)
+					displaymenu = "main"
 					drawScreen()
 				elseif e[3] >= boxes.front.x and e[3] <= boxes.front.x+10 and e[4] >= boxes.front.y and e[4] <= boxes.front.y+6 then -- FRONT
 					redirectToType("front", true)
+					displaymenu = "main"
 					drawScreen()
 				elseif e[3] >= boxes.left.x and e[3] <= boxes.left.x+10 and e[4] >= boxes.left.y and e[4] <= boxes.left.y+6 then -- LEFT
 					redirectToType("left", true)
+					displaymenu = "main"
 					drawScreen()
 				elseif e[3] >= boxes.right.x and e[3] <= boxes.right.x+10 and e[4] >= boxes.right.y and e[4] <= boxes.right.y+6 then -- RIGHT
 					redirectToType("right", true)
+					displaymenu = "main"
 					drawScreen()
 				elseif e[3] >= boxes.back.x and e[3] <= boxes.back.x+10 and e[4] >= boxes.back.y and e[4] <= boxes.back.y+6 then -- BACK
 					redirectToType("back", true)
+					displaymenu = "main"
 					drawScreen()
 				end
 			end
