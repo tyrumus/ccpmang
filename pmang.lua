@@ -4,7 +4,7 @@
 	TODO:
 	- fix channel range sorter
 	- add about page for type computer
-	- add send and receive messages
+	- add receive messages
 	- add actual notifications
 ]]--
 
@@ -676,9 +676,6 @@ local function drivePeripheral(pointer)
 					end
 					draw()
 				elseif e[3] >= w-6 and e[3] <= w and e[4] == h and sourcepath ~= "" and targetpath ~= "" then -- go button
-					logmsg("sourcepath: "..sourcepath)
-					logmsg("targetpath: "..targetpath)
-					logmsg("actualpath: "..targetpath..fs.getName(sourcepath))
 					if doCopy then
 						if fs.exists(targetpath..fs.getName(sourcepath)) then
 							clear()
@@ -1567,7 +1564,7 @@ local function modemPeripheral(pointer)
 	local function removeChannel(chan)
 		peripheral.call(pointer, "close", tonumber(chan))
 		for i = 1,#channels do
-			if chan == channels[i] then
+			if tonumber(chan) == channels[i] then
 				table.remove(channels, i)
 				break
 			end
@@ -1580,6 +1577,166 @@ local function modemPeripheral(pointer)
 		drawTopBar()
 		term.setBackgroundColor(colors.white)
 		term.setTextColor(colors.black)
+	end
+	local function sendMessages()
+		local returnvalue = true
+		local cenx = 0
+		local chan = channels[1] or 1
+		local repchan = channels[1] or 1
+		local message = ""
+
+		local function draw()
+			clear()
+			term.setBackgroundColor(colors.lightGray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(1,2)
+			term.write(" << Back ")
+
+			term.setBackgroundColor(colors.white)
+			term.setTextColor(colors.black)
+			term.setCursorPos((w-13)/2,3)
+			term.write("Send Messages")
+
+			term.setCursorPos(15,5)
+			term.write("Channel: "..chan)
+
+			term.setCursorPos(15,7)
+			term.write("Reply Channel: "..repchan)
+
+			term.setCursorPos(15,9)
+			term.write("Message: "..message)
+
+			term.setBackgroundColor(colors.gray)
+			term.setTextColor(colors.white)
+			term.setCursorPos(9,5)
+			term.write(" Set ")
+			term.setCursorPos(9,7)
+			term.write(" Set ")
+			term.setCursorPos(9,9)
+			term.write(" Set ")
+
+			cenx = (w-6)/2
+			term.setCursorPos(cenx,11)
+			term.write(" Send ")
+		end
+		draw()
+		while true do
+			local e = {os.pullEvent()}
+			if e[1] == "mouse_click" and e[2] == 1 then
+				if e[3] == w and e[4] == 1 then
+					pmang.RUNNING = false
+					break
+				elseif e[3] >= 1 and e[3] <= 9 and e[4] == 2 then
+					break
+				elseif e[3] >= noteiconxpos and e[3] <= noteiconxpos+2 and e[4] == 1 then -- NOTE CENTER HANDLER
+					displaymenu = "notecenter"
+					drawNotes()
+					displaymenu = "mainmonitor"
+					draw()
+				elseif e[3] >= 9 and e[3] <= 13 then
+					if e[4] == 5 then -- set channel
+						term.setBackgroundColor(colors.lightGray)
+						term.setTextColor(colors.white)
+						local cenx = (w-10)/2
+						local ceny = (h-4)/2
+						term.setCursorPos(cenx,ceny)
+						term.write("Channel   ")
+						term.setCursorPos(cenx,ceny+1)
+						term.write("          ")
+						term.setCursorPos(cenx,ceny+2)
+						term.write("          ")
+						term.setCursorPos(cenx,ceny+3)
+						term.write("          ")
+
+						term.setCursorPos(cenx+1,ceny+2)
+						local input = read()
+						if tonumber(input) then
+							chan = tonumber(input)
+						end
+						draw()
+					elseif e[4] == 7 then -- set reply channel
+						term.setBackgroundColor(colors.lightGray)
+						term.setTextColor(colors.white)
+						local cenx = (w-10)/2
+						local ceny = (h-4)/2
+						term.setCursorPos(cenx,ceny)
+						term.write("Reply     ")
+						term.setCursorPos(cenx,ceny+1)
+						term.write("          ")
+						term.setCursorPos(cenx,ceny+2)
+						term.write("          ")
+						term.setCursorPos(cenx,ceny+3)
+						term.write("          ")
+
+						term.setCursorPos(cenx+1,ceny+2)
+						local input = read()
+						if tonumber(input) then
+							repchan = tonumber(input)
+						end
+						draw()
+					elseif e[4] == 9 then -- set message
+						term.setBackgroundColor(colors.lightGray)
+						term.setTextColor(colors.white)
+						local cenx = (w-10)/2
+						local ceny = (h-4)/2
+						term.setCursorPos(cenx,ceny)
+						term.write("Message   ")
+						term.setCursorPos(cenx,ceny+1)
+						term.write("          ")
+						term.setCursorPos(cenx,ceny+2)
+						term.write("          ")
+						term.setCursorPos(cenx,ceny+3)
+						term.write("          ")
+
+						term.setCursorPos(cenx+1,ceny+2)
+						message = read()
+						draw()
+					end
+				elseif e[3] >= cenx and e[3] <= cenx+5 and e[4] == 11 then -- send
+					peripheral.call(pointer, "transmit", chan, repchan, message)
+					break
+				end
+			elseif e[1] == "term_resize" then
+				w,h = term.getSize()
+				drawTopBar()
+				draw()
+			elseif e[1] == "peripheral" then
+				scanPeripherals(e[2])
+			elseif e[1] == "peripheral_detach" then
+				local success = false
+				local sides = {"top", "bottom", "front", "left", "right", "back"}
+				for i = 1,#peris["network"] do
+					if e[2] == peris["network"][i] then
+						table.remove(peris["network"], i)
+						success = true
+						break
+					end
+				end
+				if not success then
+					for i = 1,6 do
+						if e[2] == sides[i] then
+							peris["sides"][sides[i]] = nil
+							break
+						end
+					end
+				end
+
+				if e[2] == pointer then
+					returnvalue = false
+					break
+				end
+			elseif e[1] == "note_center" then
+				table.insert(notemsgs,e[2])
+				unreadnotes = true
+				drawTopBar()
+			elseif e[1] == "key" and e[2] == keys.q then
+				pmang.RUNNING = false
+				break
+			elseif e[1] == "key" and e[2] == keys.n then os.queueEvent("note_center", "this is a test") -- DEV ONLY
+			end
+		end
+
+		return returnvalue
 	end
 	local function draw()
 		clear()
@@ -1646,17 +1803,19 @@ local function modemPeripheral(pointer)
 				term.setCursorPos(cenx+1,ceny+2)
 				local input = read()
 				if input ~= "" then
-					if string.find(input, "-") or string.find(input, " ") then
+					--[[if string.find(input, "-") or string.find(input, " ") then
 						local newchannels = sortNumbers(input)
 						for i = 1,#newchannels do
 							if not peripheral.call(pointer, "isOpen", newchannels[i]) then
 								peripheral.call(pointer, "open", newchannels[i])
 							end
 						end
-					else
-						peripheral.call(pointer, "open", tonumber(input))
-						table.insert(channels, input)
-					end
+					else]]--
+						if tonumber(input) then
+							peripheral.call(pointer, "open", tonumber(input))
+							table.insert(channels, tonumber(input))
+						end
+					--end
 				end
 				draw()
 			elseif e[3] >= 5 and e[3] <= 19 and e[4] == 13 then -- close channel
@@ -1676,14 +1835,14 @@ local function modemPeripheral(pointer)
 				term.setCursorPos(cenx+1,ceny+2)
 				local input = read()
 				if input ~= "" then
-					if string.find(input, "-") or string.find(input, " ") then
+					--[[if string.find(input, "-") or string.find(input, " ") then
 						local newchannels = sortNumbers(input)
 						for i = 1,#newchannels do
 							peripheral.call(pointer, "close", newchannels[i])
 						end
-					else
-						removeChannel(input)
-					end
+					else]]--
+						if tonumber(input) then removeChannel(input) end
+					--end
 				end
 				draw()
 			elseif e[3] >= 5 and e[3] <= 15 and e[4] == 15 then -- close all
@@ -1691,11 +1850,18 @@ local function modemPeripheral(pointer)
 				channels = {}
 				draw()
 			elseif e[3] >= 5 and e[3] <= 11 and e[4] == 17 then -- send
-				clear()
-				term.setCursorPos(2,3)
-				term.write("Coming soon...")
-				sleep(3)
-				draw()
+				displaymenu = "modemsend"
+				if not sendMessages() then
+					clear()
+					term.setTextColor(colors.red)
+					term.setCursorPos(1,3)
+					term.write("Peripheral removed!")
+					sleep(3)
+					break
+				else
+					displaymenu = "mainmodem"
+					draw()
+				end
 			end
 		elseif e[1] == "term_resize" then
 			w,h = term.getSize()
