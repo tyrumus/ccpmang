@@ -11,8 +11,8 @@ if not term.isColor() or not term.isColour() then
 end
 
 -- Init variables
--- local w,h = term.getSize()
-local w,h = 51,19
+local w,h = term.getSize()
+--local w,h = 51,19
 local displaymode = "full"
 local displaymenu = "main"
 local pmang = {RUNNING = true}
