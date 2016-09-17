@@ -1,0 +1,104 @@
+New code structure:
+- Init variables, check for peripheral list and program version updates
+- Init GUI framework:
+	- Button type (callback, text, xpos (set to true for centering), ypos, width, height, bgcolor, fgcolor)
+		- Has animation for onclick
+		- Callback function syntax: function() os.queueEvent("eject_button") end
+	- Text type (text, xpos (set to true for centering), ypos)
+	- Textbox type (emptytext, xpos (set to true for centering), ypos, width, bgcolor, fgcolor)
+		- returns unique identifier
+		- Custom read() function with sideways scrolling set to width variable
+		- onclick or Enter press, exit textbox focus
+		- Update() function to change context
+		- Has 
+	- Explorer Dialog function
+		- Returns selected path
+		- Uses other parts of the GUI framework
+- Scan sides and then network for peripherals
+- Init coroutines: notification center, peripheral scanner, main GUI thread
+- Notification center thread:
+	- Listen for "note_center" event and process time and message accordingly, includes unread notifier
+	- onclick: toggle notification menu or close the entire program
+		- When menu is open, listen and process scrolling
+- Peripheral scanner thread:
+	- On "peripheral" and "peripheral_detach" events
+		- get side or network name, get exact peripheral type
+		- download script from Github in the background if it doesn't exist locally
+			- If download fails, notify in menu
+			- Background downloads work through running http.get() in a coroutine
+- Main GUI thread
+	- while running do
+		- Main menu:
+			- List sides and Network button (if applicable)
+			- Update screen for every peripheral change
+		- Peripheral menu:
+			- Run downloaded script
+				- if script is still downloading then wait
+			- Wait for Back button to be pressed
+
+- Peripheral modules are saved at /.pmang/
+- Peripheral Manager has a module-based system:
+	- On startup:
+		- Checks for new program version
+			- If new version, download update and restart
+		- Checks for new repo version
+			- If new version, copy current repo list to fallback; download new list and load it. If download fails, load fallback and log error
+		- Scans all sides for peripherals
+			- Downloads and loads modules if they're not in local repo
+- Program Logic:
+	- Init
+		- Load variables
+		- Load GUI framework
+		- Check for program updates, then repo updates
+		- Scan sides; if not present then download required modules; if module that's going to be used has a newer version, then download the newer version
+		- Main thread states:
+			- mainmenu
+				- displays side connected peripherals
+				- execute related pmodule for peripheral clicked on
+			- fullmenu
+				- displays all connected peripherals
+				- execute related pmodule for peripheral clicked on
+				- Back to mainmenu button
+			- pmodule
+				- executes pmodule and waits for control to be handed back
+		- Global thread:
+			- Handles note menu and close button
+			- Listens to all events and processes them accordingly
+			- Executes all callback functions
+			- Handles pmodules
+- What is a pmodule?
+	- Made up of two functions:
+		- draw() - function ran to draw the frame
+		- input() - callback function ran to process events
+- Supported peripherals: disk drive, printer, modem/wireless modem, monitor/adv monitor, computer, turtle
+	- Disk drive:
+		- Move/copy files to and from floppy disk, interface looks like WinSCP
+		- Display/change label
+		- Play/stop music disk
+	- Printer:
+		- Print from file option
+		- Displays ink and paper level
+	- Modem/Wireless modem:
+		- Displays list of open channels
+		- Send and receive messages on a new window
+	- Monitor/adv monitor:
+		- Displays type: normal or advanced
+		- Run program on monitor
+		- Write text to monitor
+		- If color then use mouse to draw background colors
+	- Computer:
+		- Displays: ID number, on/off state
+		- Toggle On/Off state
+	- Turtle:
+		- ???
+- Module-based system is set up so that functionality is expandable to support CC Addon Peripherals (e.g. cctweaks, openperipherals)
+
+- Rounding function:
+	local function math.round(x)
+		local n = x-math.floor(x)
+		if n > 0.5 then
+			return math.ceil(x)
+		else
+			return math.floor(x)
+		end
+	end
